@@ -5,22 +5,20 @@ import scipy.constants as const
 
 ### Exercise 1 - Density and velocity distribution of an ideal gas ###
 
-# Volume
-V = 1
+
 
 ## 1. Density fluctuations ##
 
 # a) & b)
 # Generate uniformly distributed random numbers
-n = 10
 x_min = 0
 x_max = 1
-bins = 100
+bins = 10
 
 
-def plot_histogram_with_errors(x_min, x_max, n, bins):
+def plot_histogram_with_errors(x_min, x_max, N, bins):
     #Generiere unifrom n random variables
-    uniform_ran_numbers = np.random.uniform(x_min, x_max, n)
+    uniform_ran_numbers = np.random.uniform(x_min, x_max, N)
 
     # Histogramm mit plt.hist()
     # PDF = integral über alle Werte muss eins sein, kleine bin width bedeutet hohe y werte
@@ -34,7 +32,10 @@ def plot_histogram_with_errors(x_min, x_max, n, bins):
     # Calculate Error bar for each bin
     # count in Histogramm folgt Poisson daher Erwartungswert = Varianz
     # Daher fehler = sqrt(Erwatungswert)
-    sigma = np.sqrt(counts * n * bin_width) / (n * bin_width)
+    Ni_array = counts * N * bin_width
+    sigma = np.sqrt(Ni_array * (1 - (Ni_array / N))) # Frequentist Approach
+    sigma = sigma / (N * bin_width) # Normalizing
+    #sigma = np.sqrt(Ni_array) / (N * bin_width) # Poisson approach
 
     #Theoretischer Wert von pdf = 1 (Uniform
     theo_pdf = 1
@@ -42,7 +43,7 @@ def plot_histogram_with_errors(x_min, x_max, n, bins):
     # Check ob 68% der Balken die theoretische 1 Linie erreichen (Im Sigma intervall liegen)
     bin_cross_one = np.sum((counts - sigma <= theo_pdf) & (theo_pdf <= counts + sigma))
     percent_bin_cross_one = (bin_cross_one / bins) * 100
-    print(f"Bei N = {n};  Prozent an Bins die im 68% intervall liegen: ", percent_bin_cross_one)
+    print(f"Bei N = {N};  Prozent an Bins die im 68% intervall liegen: ", percent_bin_cross_one)
 
     # Fehlerbalken hinzufügen
     plt.errorbar(bin_centers, counts, yerr=sigma, fmt='o', color='r', label="Error bars")
@@ -71,9 +72,8 @@ plot_histogram_with_errors(x_min, x_max, 100000, bins)
 
 
 
-def examine_fluctuations_of_heigt(N):
+def examine_fluctuations_of_heigt(N, bins):
     M = 1000
-    bins = 500
     x_min = 0
     x_max = 1
 
@@ -157,8 +157,8 @@ def examine_fluctuations_of_heigt(N):
 
 
 
-examine_fluctuations_of_heigt(1000)
-examine_fluctuations_of_heigt(100000)
+examine_fluctuations_of_heigt(1000, bins)
+examine_fluctuations_of_heigt(100000, bins)
 
 
 
