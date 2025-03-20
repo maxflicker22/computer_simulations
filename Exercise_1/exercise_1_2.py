@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 # Initialize Variables
 x_min = 0
 x_max = 1
-n = 100000
+n = 1000000
 
 # Generate n uniform numbers
 uniform_rand_numbers = np.random.uniform(x_min, x_max, n)
