@@ -6,7 +6,7 @@ import scipy.constants as consts
 # Initialize Variables
 xmin = 0
 xmax = 1
-n = 10000
+n = 100000
 kB = consts.k
 T = 300     # K
 m = 1
@@ -32,38 +32,67 @@ cgx = lambda x: c * gx(x)
 # Condition function f / (c * g)
 condition_func = lambda x: fx(x) / cgx(x)
 
-# Generate X from g(x) - Exercise 2
-X = generate_x_from_gx(uniform_rand_numbers)
 
 # Rejection sampling function
-def rejection_sampling(u, condition_func, x, n_samples):
+def rejection_sampling(condition_func, gx_sampler, n_samples):
     samples = []
     for i in range(n_samples):
+        # Sample einmal von u und einmal von gx
+        # nicht von gx mit u sampln sonsg kommt
+        # g(x) leicht modifiziert heraus
+        # Sample von uniform
         u = np.random.uniform(0, 1)
-        if u <= condition_func(x[i]):  # Acceptance condition
-            samples.append(x[i])
+        # Sample from g(x)
+        x_sample = gx_sampler(np.random.uniform(0, 1))
+
+        # Check condition
+        if u <= condition_func(x_sample):  # Acceptance condition
+            samples.append(x_sample)
 
     return np.array(samples)
 
 # Run rejection sampling
-X_prime = rejection_sampling(uniform_rand_numbers, condition_func, X, n)
-print("X", X)
-print("X_lengthg: ", len(X))
+X_prime = rejection_sampling(condition_func, generate_x_from_gx, n)
+print("X_lengthg: ", n)
 print("X_prime", X_prime)
 print("X_prime_lengthg: ", len(X_prime))
+print("Probability for Acceptanc 1/c = ", c)
 
-# Plot functions
-plt.title("Involved Functions")
-plt.scatter(X, fx(X), label="f(x)")
-plt.scatter(X, gx(X), label="g(x)")
-plt.scatter(X, cgx(X), label="c * g(x)")
-plt.scatter(X, fx(X) / cgx(X), label="f(x) / (c * g(x))")
-plt.legend()
-plt.show()
 
 # Plot histogram of accepted samples
-plt.title("Histogram sampled from f(x)")
+plt.title("Histogram sampled from f(x) with g(x) = exp(-x)")
 plt.hist(X_prime, bins=bins, density=True, alpha=0.6, label="Histogram f(x)")
 plt.plot(x_vals, fx(x_vals))
 plt.legend()
 plt.show()
+
+
+### c - Choose different g(x) ###
+
+# choose for g(x) constant funktion
+# X is now uniform with max Value of f(x)
+
+# Condition function f / (max(f(x)) * 1)
+max_fx = np.max(fx(x_vals))
+max_fx = np.max(fx(x_vals)) * 1
+condition_func = lambda x: fx(x) / max_fx
+
+# Sample from constant pdf -> uniform
+def sample_x_for_const_gx(x):
+    return np.random.uniform(0, 6)
+
+# Run rejection sampling
+X_prime = rejection_sampling(condition_func, sample_x_for_const_gx, n)
+print("X_lengthg: ", n)
+print("X_prime", X_prime)
+print("X_prime_lengthg: ", len(X_prime))
+print("Probability for Acceptanc 1/c = ", max_fx)
+
+
+# Plot histogram of accepted samples
+plt.title("Histogram sampled from f(x) with c*g(x) = max(f(x))")
+plt.hist(X_prime, bins=bins, density=True, alpha=0.6, label="Histogram f(x)")
+plt.plot(x_vals, fx(x_vals))
+plt.legend()
+plt.show()
+
