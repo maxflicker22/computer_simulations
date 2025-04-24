@@ -1,3 +1,4 @@
+# %%
 import numpy as np
 import scipy.constants as consts
 import matplotlib.pyplot as plt
@@ -226,3 +227,5 @@ def compare_errors_over_N(N_values, bins):
 N_values = np.logspace(1, 4.7, 15, dtype=int)  # From 1e2 (100) to ~5e4
 N_values = np.linspace(20, 3000, 300)  # From 1e2 (100) to ~5e4
 compare_errors_over_N(N_values, bins)
+
+# %%

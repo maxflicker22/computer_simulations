@@ -1,5 +1,9 @@
-import numpy as np
+# %%
+import matplotlib
 import matplotlib.pyplot as plt
+
+
+import numpy as np
 import scipy.stats as stats
 import scipy.constants as const
 
@@ -44,6 +48,7 @@ def plot_histogram_with_errors(x_min, x_max, N, bins):
     bin_cross_one = np.sum((counts - sigma <= theo_pdf) & (theo_pdf <= counts + sigma))
     percent_bin_cross_one = (bin_cross_one / bins) * 100
     print(f"Bei N = {N};  Prozent an Bins die im 68% intervall liegen: ", percent_bin_cross_one)
+
 
     # Fehlerbalken hinzufügen
     plt.errorbar(bin_centers, counts, yerr=sigma, fmt='o', color='r', label="Error bars")
@@ -152,8 +157,8 @@ def examine_fluctuations_of_heigt(N, bins):
     print(f"Ideal gas isothermal compressibility: {kappa_T_ideal:.6e} (1/Pa)")
 
     # Compare results
-    difference = abs(kappa_T - kappa_T_ideal)
-    print(f"Difference: {difference:.6e} (1/Pa)")
+    relativ_error = abs(kappa_T - kappa_T_ideal) / kappa_T_ideal
+    print(f"relative Error: {relativ_error:.6e} (1/Pa)")
 
 
 
@@ -163,3 +168,5 @@ examine_fluctuations_of_heigt(100000, bins)
 
 
 
+
+# %%

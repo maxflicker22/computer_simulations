@@ -1,3 +1,4 @@
+# %%
 from exercise_1_2 import generate_x_from_gx
 import matplotlib.pyplot as plt
 import numpy as np
@@ -56,7 +57,7 @@ X_prime = rejection_sampling(condition_func, generate_x_from_gx, n)
 print("X_lengthg: ", n)
 print("X_prime", X_prime)
 print("X_prime_lengthg: ", len(X_prime))
-print("Probability for Acceptanc 1/c = ", c)
+print("Probability for Acceptanc 1/c = ", 1/c)
 
 
 # Plot histogram of accepted samples
@@ -75,6 +76,7 @@ plt.show()
 # Condition function f / (max(f(x)) * 1)
 max_fx = np.max(fx(x_vals))
 max_fx = np.max(fx(x_vals)) * 1
+print(max_fx)
 condition_func = lambda x: fx(x) / max_fx
 
 # Sample from constant pdf -> uniform
@@ -86,7 +88,8 @@ X_prime = rejection_sampling(condition_func, sample_x_for_const_gx, n)
 print("X_lengthg: ", n)
 print("X_prime", X_prime)
 print("X_prime_lengthg: ", len(X_prime))
-print("Probability for Acceptanc 1/c = ", max_fx)
+print("Probability for Acceptanc 1/c = ", 1 / max_fx) # c ist kleiner 1 weil fx < 1 ist
+# 1 / c ist keine vernünftige wahrsacheinlichkeit
 
 
 # Plot histogram of accepted samples
@@ -96,3 +99,5 @@ plt.plot(x_vals, fx(x_vals))
 plt.legend()
 plt.show()
 
+
+# %%
