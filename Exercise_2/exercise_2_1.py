@@ -142,46 +142,46 @@ def monte_carlo_simulation(n_steps, T):
 
 #-------------------------------------------------
 
-# pot_energy_grid = np.zeros((grid_range, grid_range))
-# T_list = [0.01, 300, 1000, 5000, 10000, 100000] # K
+pot_energy_grid = np.zeros((grid_range, grid_range))
+T_list = [0.01, 300, 1000, 5000, 10000, 100000] # K
 
-# last_interaction_energy = []
-# accepted_steps_list = []
+last_interaction_energy = []
+accepted_steps_list = []
 
 
-# plt.figure(figsize=(12, 8))  # Create one big figure BEFORE the loop
+plt.figure(figsize=(12, 8))  # Create one big figure BEFORE the loop
 
-# for i in range(len(T_list)):
-#     n_steps = 15000
-#     T = T_list[1]
-#     #plot_grid()
+for i in range(len(T_list)):
+    n_steps = 15000
+    T = T_list[1]
+    #plot_grid()
     
-#     interaction_energy_list, accepted_steps = monte_carlo_simulation(n_steps, T)
-#     #plot_grid()
+    interaction_energy_list, accepted_steps = monte_carlo_simulation(n_steps, T)
+    #plot_grid()
 
-#     # Plot each interaction energy curve, label it by temperature
-#     plt.plot(interaction_energy_list, label=f"T = {T} K")
+    # Plot each interaction energy curve, label it by temperature
+    plt.plot(interaction_energy_list, label=f"T = {T} K")
 
-#     print("Accepted Steps: ", accepted_steps)
-#     accepted_steps_list.append(accepted_steps)
-#     print("Last interaction energy: ", interaction_energy_list[-1])
-#     last_interaction_energy.append(interaction_energy_list[-1])
+    print("Accepted Steps: ", accepted_steps)
+    accepted_steps_list.append(accepted_steps)
+    print("Last interaction energy: ", interaction_energy_list[-1])
+    last_interaction_energy.append(interaction_energy_list[-1])
 
-#     # Generate a new 10x10 grid of unit vectors (reset for next temperature)
-#     #np.random.seed(42) # Hier einkommentieren für immer gleichen start
-#     grid_of_unitvec = np.array([
-#         [unitvector(np.random.uniform(min(range_of_angels), max(range_of_angels))) for _ in range(grid_range)]
-#         for _ in range(grid_range)
-#     ])
+    # Generate a new 10x10 grid of unit vectors (reset for next temperature)
+    #np.random.seed(42) # Hier einkommentieren für immer gleichen start
+    grid_of_unitvec = np.array([
+        [unitvector(np.random.uniform(min(range_of_angels), max(range_of_angels))) for _ in range(grid_range)]
+        for _ in range(grid_range)
+    ])
 
-# # After the loop: add labels, title, legend, grid
-# plt.xlabel("Monte Carlo Steps")
-# plt.ylabel("Interaction Energy")
-# plt.title("Monte Carlo Simulation of Interaction Energy for Different Temperatures")
-# plt.legend()
-# plt.grid()
-# #plt.savefig("monte_carlo_simulation_vs_steps.png", dpi=300)  # Save the figure
-# plt.show()
+# After the loop: add labels, title, legend, grid
+plt.xlabel("Monte Carlo Steps")
+plt.ylabel("Interaction Energy")
+plt.title("Monte Carlo Simulation of Interaction Energy for Different Temperatures")
+plt.legend()
+plt.grid()
+#plt.savefig("monte_carlo_simulation_vs_steps.png", dpi=300)  # Save the figure
+plt.show()
 #----------------------------------------------------------
 
 
@@ -241,75 +241,75 @@ def nematic_order_tensor(grid_of_unitvec):
     return Q_tensor, S
 
 
-# def nematic_order_parameter(grid_of_unitvec):
-#     general_director_field = np.zeros(grid_of_unitvec.shape)
-#     general_angel = np.pi / 2
-#     general_director_field[:, :, 0] = np.cos(general_angel)
-#     general_director_field[:, :, 1] = np.sin(general_angel)
+def nematic_order_parameter(grid_of_unitvec):
+    general_director_field = np.zeros(grid_of_unitvec.shape)
+    general_angel = np.pi / 2
+    general_director_field[:, :, 0] = np.cos(general_angel)
+    general_director_field[:, :, 1] = np.sin(general_angel)
 
-#     identity_matrix = np.eye(grid_of_unitvec.shape[0])
+    identity_matrix = np.eye(grid_of_unitvec.shape[0])
 
-#     S_matrix = 2 * (np.sum(grid_of_unitvec * general_director_field, axis=-1))**2 - identity_matrix
-#     S = np.sum(S_matrix) / S_matrix.size
+    S_matrix = 2 * (np.sum(grid_of_unitvec * general_director_field, axis=-1))**2 - identity_matrix
+    S = np.sum(S_matrix) / S_matrix.size
 
-#     return S
+    return S
     
 
 
-# pot_energy_grid = np.zeros((grid_range, grid_range))
-# T_list = {"T1": 300 / consts.k, "T2": 300}
-# last_interaction_energy = []
-# accepted_steps_list = []
+pot_energy_grid = np.zeros((grid_range, grid_range))
+T_list = {"T1": 300 / consts.k, "T2": 300}
+last_interaction_energy = []
+accepted_steps_list = []
 
-# S_list = {"T1": [], "T2": []}
-# Q_list = {"T1": [], "T2": []}
-# plot_grid()
+S_list = {"T1": [], "T2": []}
+Q_list = {"T1": [], "T2": []}
+plot_grid()
 
-# plt.figure(figsize=(12, 8))  # Create one big figure BEFORE the loop
+plt.figure(figsize=(12, 8))  # Create one big figure BEFORE the loop
 
-# for key, T in T_list.items():
+for key, T in T_list.items():
 
-#     np.random.seed(42) # Hier einkommentieren für immer gleichen start
-#     grid_of_unitvec = np.array([
-#         [unitvector(np.random.uniform(min(range_of_angels), max(range_of_angels))) for _ in range(grid_range)]
-#         for _ in range(grid_range)
-#     ])
+    np.random.seed(42) # Hier einkommentieren für immer gleichen start
+    grid_of_unitvec = np.array([
+        [unitvector(np.random.uniform(min(range_of_angels), max(range_of_angels))) for _ in range(grid_range)]
+        for _ in range(grid_range)
+    ])
 
-#     # Number of Monte Carlo steps
-#     n_steps = 100000
+    # Number of Monte Carlo steps
+    n_steps = 100000
 
-#     interaction_energy_list, accepted_steps, Q_list_mc, S_list_mc = monte_carlo_simulation(n_steps, T)
+    interaction_energy_list, accepted_steps, Q_list_mc, S_list_mc = monte_carlo_simulation(n_steps, T)
     
-#     print("Nematic order tensor Q: ", Q_list_mc)
-#     print("Nematic order parameter S: ", S_list_mc)
-#     S_list[key] = S_list_mc
-#     Q_list[key] = Q_list_mc
-#     #plot_grid()
+    print("Nematic order tensor Q: ", Q_list_mc)
+    print("Nematic order parameter S: ", S_list_mc)
+    S_list[key] = S_list_mc
+    Q_list[key] = Q_list_mc
+    #plot_grid()
 
-#     # Plot each interaction energy curve, label it by temperature
-#     plt.plot(interaction_energy_list, label=f"T = {T} K")
+    # Plot each interaction energy curve, label it by temperature
+    plt.plot(interaction_energy_list, label=f"T = {T} K")
 
-#     print("Accepted Steps: ", accepted_steps)
-#     accepted_steps_list.append(accepted_steps)
-#     print("Last interaction energy: ", interaction_energy_list[-1])
-#     last_interaction_energy.append(interaction_energy_list[-1])
+    print("Accepted Steps: ", accepted_steps)
+    accepted_steps_list.append(accepted_steps)
+    print("Last interaction energy: ", interaction_energy_list[-1])
+    last_interaction_energy.append(interaction_energy_list[-1])
 
-#     # Generate a new 10x10 grid of unit vectors (reset for next temperature)
+    # Generate a new 10x10 grid of unit vectors (reset for next temperature)
     
 
-# # After the loop: add labels, title, legend, grid
-# plt.xlabel("Monte Carlo Steps")
-# plt.ylabel("Interaction Energy")
-# plt.title("Monte Carlo Simulation of Interaction Energy for Different Temperatures")
-# plt.legend()
-# plt.grid()
-# #plt.savefig("monte_carlo_simulation_vs_steps.png", dpi=300)  # Save the figure
-# plt.show()
+# After the loop: add labels, title, legend, grid
+plt.xlabel("Monte Carlo Steps")
+plt.ylabel("Interaction Energy")
+plt.title("Monte Carlo Simulation of Interaction Energy for Different Temperatures")
+plt.legend()
+plt.grid()
+#plt.savefig("monte_carlo_simulation_vs_steps.png", dpi=300)  # Save the figure
+plt.show()
 
-# print("S_list: ", S_list)
+print("S_list: ", S_list)
 
 
-# plot_grid()
+plot_grid()
 
 #-----------------------------------------------------------
 
@@ -420,64 +420,115 @@ def integrate_autocorrelation(autocorrelation_list):
 ### Task 3 ###
 
 def calculate_error_of_S_mean(variance_of_S_list, tau_int, n_steps):
-    variance = variance_of_S_list / n_steps * tau_int * 2
+    variance = (variance_of_S_list / n_steps) * tau_int * 2
     error = np.sqrt(variance)
     return error
 
 pot_energy_grid = np.zeros((grid_range, grid_range))
-T_list_part1 = np.linspace(0.01, 1 / consts.k, 500) # K]
-T_list_part2 = np.linspace(1 / consts.k, 4 / consts.k, 20) # K]
-T_list_combined = np.concatenate((T_list_part1, T_list_part2))
+T_list_part1 = np.logspace(19, 21, 2)
+T_list_part2 = np.linspace(1e22, 1e23, 20)
+T_list_part3 = np.logspace(23.01, 24, 3)
+T_list_combined = np.concatenate((T_list_part1, T_list_part2, T_list_part3))
+
 last_interaction_energy = []
 accepted_steps_list = []
 
 S_list_mean = []
 S_error = []
 
-plot_grid()
+
+
 
 
 
 for T in T_list_combined:
+    print("T: ", T)
 
     np.random.seed(42) # Hier einkommentieren für immer gleichen start
     grid_of_unitvec = np.array([
         [unitvector(np.random.uniform(min(range_of_angels), max(range_of_angels))) for _ in range(grid_range)]
         for _ in range(grid_range)
     ])
+    #plot_grid()
 
     # Number of Monte Carlo steps
-    n_steps = 10000
+    n_steps = 100000
 
     interaction_energy_list, accepted_steps, Q_list_mc, S_list_mc = monte_carlo_simulation(n_steps, T)
-    
-    print("Nematic order tensor Q: ", Q_list_mc)
-    print("Nematic order parameter S: ", S_list_mc)
+    #plot_grid().copy()
+
     S_list_mean.append(np.mean(S_list_mc))
-    autocorrelation = calculate_autocorrelation(S_list_mc)
-    tau_int = integrate_autocorrelation(autocorrelation)
+    autocorrelation = calculate_autocorrelation(S_list_mc).copy()
+    tau_int = integrate_autocorrelation(autocorrelation).copy()
     S_error.append(calculate_error_of_S_mean(np.var(S_list_mc), tau_int, n_steps))
     #plot_grid()
 
-    
-
-    print("Accepted Steps: ", accepted_steps)
     accepted_steps_list.append(accepted_steps)
-    print("Last interaction energy: ", interaction_energy_list[-1])
+
     last_interaction_energy.append(interaction_energy_list[-1])
 
     # Generate a new 10x10 grid of unit vectors (reset for next temperature)
-    
+
+dSdt = np.gradient(S_list_mean, T_list_combined)
+ddSdt = np.gradient(dSdt, T_list_combined)  
+index_phase_transistion = np.argmin(dSdt)
+
 plt.figure(figsize=(12, 8))  # Create one big figure BEFORE the loop
 # Plot each interaction energy curve, label it by temperature
-plt.plot(S_list_mean, label=f"T = {T} K")
+#plt.plot(S_list_mean, label=f"T = {T} K")
+plt.errorbar(T_list_combined, S_list_mean, yerr=S_error, fmt='o', capsize=5, label="<S> with error")
 # After the loop: add labels, title, legend, grid
-plt.xlabel("Monte Carlo Steps")
-plt.ylabel("Interaction Energy")
-plt.title("Monte Carlo Simulation of Interaction Energy for Different Temperatures")
+plt.vlines(x=T_list_combined[index_phase_transistion], ymin=0, ymax=1, color='red', linestyle='--', label="Phase Transition")
+plt.xlabel("Temperature (K)")
+plt.ylabel("<S> Order Parameter")
+plt.title("<S> for Different Temperatures")
 plt.legend()
 plt.grid()
-#plt.savefig("monte_carlo_simulation_vs_steps.png", dpi=300)  # Save the figure
+plt.savefig("phase_transistion.png", dpi=300)  # Save the figure
+plt.show()
+
+
+
+plt.figure(figsize=(12, 8))  # Create one big figure BEFORE the loop
+# Plot each interaction energy curve, label it by temperature
+#plt.plot(S_list_mean, label=f"T = {T} K")
+plt.plot(T_list_combined, dSdt, label="d<S>/dt")
+plt.vlines(x=T_list_combined[index_phase_transistion], ymin=dSdt.min(), ymax=dSdt.max(), color='red', linestyle='--', label="Phase Transition")
+# After the loop: add labels, title, legend, grid
+plt.xlabel("Temperature (K)")
+plt.ylabel("<S> Order Parameter")
+plt.title("d<S>/dt for Different Temperatures")
+plt.legend()
+plt.grid()
+plt.savefig("phase_transistion_derivative.png", dpi=300)  # Save the figure
+plt.show()
+
+plt.figure(figsize=(12, 8))  # Create one big figure BEFORE the loop
+# Plot each interaction energy curve, label it by temperature
+#plt.plot(S_list_mean, label=f"T = {T} K")
+plt.plot(T_list_combined, ddSdt, label="dd<S>/dt^2")
+plt.vlines(x=T_list_combined[index_phase_transistion], ymin=ddSdt.min(), ymax=ddSdt.max(), color='red', linestyle='--', label="Phase Transition")
+# After the loop: add labels, title, legend, grid
+plt.xlabel("Temperature (K)")
+plt.ylabel("<S> Order Parameter")
+plt.title("dd<S>/dt^2 for Different Temperatures")
+plt.legend()
+plt.grid()
+plt.savefig("phase_transistion_sec_derivative.png", dpi=300)  # Save the figure
+plt.show()
+
+plt.figure(figsize=(12, 8))  # Create one big figure BEFORE the loop
+# Plot each interaction energy curve, label it by temperature
+#plt.plot(S_list_mean, label=f"T = {T} K")
+plt.plot(T_list_combined, S_error, label="Error (<S>)")
+plt.vlines(x=T_list_combined[index_phase_transistion], ymin=S_error.min(), ymax=S_error.max(), color='red', linestyle='--', label="Phase Transition")
+# After the loop: add labels, title, legend, grid
+plt.xlabel("Temperature (K)")
+plt.ylabel("Error (<S>)")
+plt.title("Error (<S>) for Different Temperatures")
+plt.legend()
+plt.grid()
+plt.savefig("phase_transistion_error.png", dpi=300)  # Save the figure
 plt.show()
 
 
