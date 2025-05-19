@@ -230,7 +230,7 @@ T = 1.0  # Temperature in Kelvin
 kb = 1.  # Boltzmann constant
 sigma = 1.0 # length scale
 epsilon = 1.0  # eneregy scale
-delta_t = 0.00001 * np.sqrt(m * sigma ** 2 / epsilon) # time step
+delta_t = 0.0001 * np.sqrt(m * sigma ** 2 / epsilon) # time step
 rc = 5. * sigma  # Cutoff radius for neighbor search
 # OBERVATION: Packingfracion is when random between 0.5 and 0.6
 
