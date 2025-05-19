@@ -3,6 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.constants as const
 import time
+import numba
+
+
+
 def is_overlapping(new_position, existing_positions, radius_of_particales, box_width, box_height):
     """
     Check if the particle overlaps with existing particles.
@@ -57,19 +61,19 @@ def initialize_velocities_of_particals(number_of_particles, T = 1.0, kb = 1., m=
 
 
 # Simplified Wang-Frenkel potential
-def wang_frenkel(delta, rc,  epsilon=1.0, sigma=1.0):
+#@numba.njit
+def wang_frenkel(r, rc,  epsilon=1.0, sigma=1.0):
     #print("delta", delta)
-    r = np.linalg.norm(delta, axis=-1)
     #print("r", r)
     mask = (r < rc) & (r > 0)  # r > 0 to avoid division by zero
     wf = np.zeros_like(r)
     wf[mask] = epsilon * ((sigma / r[mask])**2 - 1) * (((rc / r[mask])**2 - 1)) ** 2
     return 0.5 * np.sum(wf)  # 0.5 to avoid double counting
 
-
-def wang_frenkel_force_vector(delta, rc, epsilon=1.0, sigma=1.0):
-    r = np.linalg.norm(delta, axis=-1)  # Shape: (N, N)
-    forces = np.zeros_like(delta)
+#@numba.njit
+def wang_frenkel_force_vector(r, delta, rc, epsilon=1.0, sigma=1.0):
+    
+    forces = np.zeros([r.shape[0], r.shape[1], 2])
     
     mask = (r < rc) & (r > 0)  # Avoid division by zero
     
@@ -82,10 +86,11 @@ def wang_frenkel_force_vector(delta, rc, epsilon=1.0, sigma=1.0):
             (4 * epsilon * term1 * term2 * rc**2 / r_valid**3)
 
     # Calculate unit vectors safely
-    with np.errstate(divide='ignore', invalid='ignore'):
-        unit_vectors = np.nan_to_num(delta[mask] / r_valid[:, None])  # Shape (M, 2)
+    #with np.errstate(divide='ignore', invalid='ignore'):
+    unit_vectors = np.nan_to_num(delta[mask] / r_valid[:, None])  # Shape (M, 2)
 
     # Calculate final force vectors
+    
     forces[mask] = -dU_dr[:, None] * unit_vectors  # Multiply scalar force by unit vector
 
     total_forces = np.sum(forces, axis=1)  # Shape: (N, 2)
@@ -132,6 +137,7 @@ def create_lists_of_particals_in_subcells(particals_position, box_width, box_hei
 
     return cell_indices
 
+@numba.njit
 def calculate_distance_between_particals(positions, box_w, box_h):
     """
     Calculate the distance between two particles with periodic boundaries.
@@ -155,8 +161,9 @@ def calculate_forces_and_potential_between_particals(positions, rc):
     r_values = partical_distances[i_lower, j_lower]
     #print(f"R values: {r_values.shape}")
     # Calculate forces using the Wang-Frenkel potential
-    wf_force_values = wang_frenkel_force_vector(partical_distances, rc=rc)
-    wf_pot_energy_values = wang_frenkel(partical_distances, rc=rc)
+    r = np.linalg.norm(partical_distances, axis=-1)  # Shape: (N, N)
+    wf_force_values = wang_frenkel_force_vector(r, partical_distances,  rc=rc)
+    wf_pot_energy_values = wang_frenkel(r, rc=rc)
     #print("wf_pot_energy_values", wf_pot_energy_values)
     return wf_force_values, wf_pot_energy_values
     # Calculate forces using the Wang-Frenkel potential
@@ -242,7 +249,7 @@ print(f"Packing fraction: {packing_fraction:.2f}")
 
 
 # Evaluate computational cost
-evaluate_computational_cost()
+#evaluate_computational_cost()
 
 # Plotting
 fig, ax = plt.subplots(figsize=(6, 6))
