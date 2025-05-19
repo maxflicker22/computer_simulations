@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.constants as const
 import time
-import numba
+from numba import njit, prange
 
 
 
@@ -98,63 +98,94 @@ def wang_frenkel_force_vector(r, delta, rc, epsilon=1.0, sigma=1.0):
     return total_forces
 
 
+def prepare_cell_lists(positions, box_w, box_h, rc):
+    num_cells_x = int(box_w // rc)
+    num_cells_y = int(box_h // rc)
+    num_cells = num_cells_x * num_cells_y
 
-def create_lists_of_particals_in_subcells(particals_position, box_width, box_height, rc):
-    """
-    Create lists of particles in subcells.
-    """
-    num_subcells_x = int(box_width // rc)
-    num_subcells_y = int(box_height // rc)
+    cell_ids_x = (positions[:, 0] // rc).astype(np.int32) % num_cells_x
+    cell_ids_y = (positions[:, 1] // rc).astype(np.int32) % num_cells_y
+    cell_ids = cell_ids_y * num_cells_x + cell_ids_x
 
-    cell_indices_x = ((particals_position[:, 0] // rc) % num_subcells_x).astype(int)
-    cell_indices_y = ((particals_position[:, 1] // rc) % num_subcells_y).astype(int)
-    cell_indices = np.vstack((cell_indices_x, cell_indices_y)).T
-    #print(f"Cell indices:\n{cell_indices}")
-    sorted_cell_indices = np.sort(cell_indices, axis=0)
-    #print(f"Sorted Cell indices:{cell_indices[sorted_cell_indices]}")
-    cell_ids = cell_indices_y * num_subcells_x + cell_indices_x  # 1D Cell-IDs
-    #print(f"Cell IDs: {cell_ids}")
-    sorted_indices = np.argsort(cell_ids)
-    sorted_cell_ids = cell_ids[sorted_indices]
-    #print(f"Sorted Cell IDs: {sorted_cell_ids}")
+    cell_indices = [[] for _ in range(num_cells)]
+    for idx, cell_id in enumerate(cell_ids):
+        cell_indices[cell_id].append(idx)
 
-    # Array der 9 möglichen Nachbar-Offsets
-    neighbor_offsets = np.array([
-        [-1, -1], [0, -1], [1, -1],
-        [-1,  0], [0,  0], [1,  0],
-        [-1,  1], [0,  1], [1,  1]
-    ])
+    # Convert lists to Numba-friendly arrays
+    cell_indices = [np.array(cell, dtype=np.int32) for cell in cell_indices]
 
-    # Berechne alle Nachbarzellen mit PB
-    target_cell = np.array([0, 0])  # Beispiel Zielzelles
-    neighbors = (np.array(target_cell) + neighbor_offsets) % [num_subcells_x, num_subcells_y]
+    # Precompute neighbor maps
+    neighbor_offsets = np.array([[0, 0], [1, 0], [0, 1], [1, 1], [-1, 1]], dtype=np.int32)
+    neighbor_map = []
 
-    #print(f"Neighbors: {neighbors}")
-    #print("Cell indices:", cell_indices)
-    #indices = np.where(cell_indices[:, None] == neighbors).any(axis=2)
-    #print(f"Indices: {indices}")
+    for cx in range(num_cells_x):
+        for cy in range(num_cells_y):
+            neighbors = []
+            for dx, dy in neighbor_offsets:
+                nx = (cx + dx) % num_cells_x
+                ny = (cy + dy) % num_cells_y
+                neighbor_id = ny * num_cells_x + nx
+                neighbors.append(neighbor_id)
+            neighbor_map.append(np.array(neighbors, dtype=np.int32))
+
+    return cell_indices, neighbor_map
 
 
-    return cell_indices
-
-@numba.njit
-def calculate_distance_between_particals(positions, box_w, box_h):
-    """
-    Calculate the distance between two particles with periodic boundaries.
-    """
+@njit(parallel=True)
+def compute_distances_with_cutoff_numba(positions, box_w, box_h, cell_indices, neighbor_map, rc):
+    N = positions.shape[0]
+    rc2 = rc * rc
     box_size = np.array([box_w, box_h])
-    delta = positions[:,None,:] - positions[None,:,:]
-    delta -= np.round(delta / box_size) * box_size  # Apply periodic boundary conditions
-    #particals_distancees = np.linalg.norm(delta, axis=-1)
 
-    #print("Particals distances:", delta)
-    return delta
+    distance_matrix = np.zeros((N, N, 2))
 
-def calculate_forces_and_potential_between_particals(positions, rc):
+    # prange is from numba und Parallelisiert den for loop auf mehrere cpus
+    for current_cell in prange(len(neighbor_map)):
+        particles_i = cell_indices[current_cell]
+        n_i = len(particles_i)
+        if n_i == 0:
+            continue
+
+        # 1 Abstände innerhalb der aktuellen Zelle berechnen (ohne doppelte Berechnungen)
+        for idx1 in range(n_i):
+            i = particles_i[idx1]
+            for idx2 in range(idx1 + 1, n_i):  # idx2 > idx1 → keine Doppelberechnung
+                j = particles_i[idx2]
+
+                rij = positions[j] - positions[i]
+                rij -= np.round(rij / box_size) * box_size
+                dist2 = rij[0]**2 + rij[1]**2
+
+                if dist2 < rc2:
+                    distance_matrix[i, j] = rij
+
+        # 2 Abstände zu Nachbarzellen berechnen
+        for neighbor_cell in neighbor_map[current_cell]:
+            if neighbor_cell == current_cell:
+                continue  # Wurde oben schon behandelt
+
+            particles_j = cell_indices[neighbor_cell]
+            if len(particles_j) == 0:
+                continue
+
+            for i in particles_i:
+                for j in particles_j:
+                    rij = positions[j] - positions[i]
+                    rij -= np.round(rij / box_size) * box_size
+                    dist2 = rij[0]**2 + rij[1]**2
+
+                    if dist2 < rc2:
+                        distance_matrix[i, j] = rij
+
+    return distance_matrix
+
+def calculate_forces_and_potential_between_particals(positions, box_w, box_h, cell_list, neighbours_map, rc):
     """
     Calculate forces between particles based on the Wang-Frenkel potential.
     """
-    partical_distances = calculate_distance_between_particals(positions, box_w, box_h)
+    #cell_list, neighbours_map = prepare_cell_lists(positions, box_w, box_h, rc)
+    partical_distances = compute_distances_with_cutoff_numba(positions, box_w, box_h, cell_list, neighbours_map, rc)
+    #partical_distances = calculate_distance_between_particals(positions, box_w, box_h)
     #print(f"Partical distances: {partical_distances.shape}")
     N = partical_distances.shape[0]
     i_lower, j_lower = np.tril_indices(N, k=-1)
@@ -168,19 +199,45 @@ def calculate_forces_and_potential_between_particals(positions, rc):
     return wf_force_values, wf_pot_energy_values
     # Calculate forces using the Wang-Frenkel potential
 
+@njit()
+def calculate_distance_between_particals(positions, box_w, box_h):
+    """
+    Calculate the distance between two particles with periodic boundaries.
+    """
+    box_size = np.array([box_w, box_h])
+    delta = positions[:,None,:] - positions[None,:,:]
+    delta -= np.round(delta / box_size) * box_size  # Apply periodic boundary conditions
+    #particals_distancees = np.linalg.norm(delta, axis=-1)
+
+    #print("Particals distances:", delta)
+    return delta
+
 def evaluate_computational_cost():
-    N_values = np.arange(100, 4100, 500)  # Vary N from 100 to 1000
+    N_values = np.arange(100, 3600, 500)  # Vary N from 100 to 1000
     times = []
+    times_neighbours = []
+
+    
 
     for N in N_values:
+        positions = np.random.uniform(0, box_h, [N, 2])
+
+
         print(f"Evaluating for N = {N}")
-        positions = np.random.rand(N, 2)  # 2D positions
         start_time = time.perf_counter()
         distances = calculate_distance_between_particals(positions, box_w, box_h)
         end_time = time.perf_counter()
         times.append(end_time - start_time)
 
+        print(f"Evaluating fork Neighbours N = {N}")
+        start_time = time.perf_counter()
+        cell_list, neighbor_cells = prepare_cell_lists(positions, box_w, box_h, rc)
+        partical_distances = compute_distances_with_cutoff_numba(positions, box_w, box_h, cell_list, neighbor_cells, rc)
+        end_time = time.perf_counter()
+        times_neighbours.append(end_time - start_time)
+
     times = np.array(times) 
+    times_neighbours = np.array(times_neighbours) 
     # Polynomial fit of degree 2 (quadratic)
     coeffs = np.polyfit(N_values, times, 2)
     fit_func = np.poly1d(coeffs)  # Create a callable polynomial function
@@ -189,6 +246,7 @@ def evaluate_computational_cost():
     plt.figure(figsize=(8, 5))
     plt.plot(N_values, times, 'o-', label='Measured Time')
     plt.plot(N_values, fit_func(N_values), 'r--', label=f'Quadratic Fit: {coeffs[0]:.2e}·N² + {coeffs[1]:.2e}·N + {coeffs[2]:.2e}')
+    plt.plot(N_values, times_neighbours, 'o-', label='Measured Time Neighbours')
     plt.xlabel('Number of Particles (N)')
     plt.ylabel('Time (s)')
     plt.title('Computational Cost of Distance Calculation')
@@ -197,18 +255,18 @@ def evaluate_computational_cost():
     plt.savefig("Cost_Evaluaion")
     #plt.show()
 
-def velocity_verlet(positions, velocities, forces, dt, box_size, m=1.0, kb = 1.0):
+def velocity_verlet(positions, velocities, forces, dt, box_size, cell_list, neighbour_map, m=1.0, kb = 1.0, rc=2.5):
     """One step of the velocity-Verlet algorithm."""
 
     # Half-step velocity update
-    velocities_half = velocities.copy() + 0.5 * forces * dt / m
+    velocities_half = velocities.copy() +  0.5 * forces * dt / m
 
     # Position update
     positions += velocities_half * dt
     positions %= box_size  # Periodic boundary conditions
 
-    # Force update
-    forces_new, potential_energy = calculate_forces_and_potential_between_particals(positions, box_size)
+
+    forces_new, potential_energy = calculate_forces_and_potential_between_particals(positions, box_size[0], box_size[0], cell_list, neighbour_map, rc=rc)
     #print("forces_new", forces_new)
     # Full-step velocity update
     velocities = velocities_half + 0.5 * forces_new * dt / m
@@ -237,8 +295,8 @@ T = 1.0  # Temperature in Kelvin
 kb = 1.  # Boltzmann constant
 sigma = 1.0 # length scale
 epsilon = 1.0  # eneregy scale
-delta_t = 0.0001 * np.sqrt(m * sigma ** 2 / epsilon) # time step
-rc = 5. * sigma  # Cutoff radius for neighbor search
+delta_t = 0.000001 * np.sqrt(m * sigma ** 2 / epsilon) # time step
+rc = 3. * sigma  # Cutoff radius for neighbor search
 # OBERVATION: Packingfracion is when random between 0.5 and 0.6
 
 particals_position, packing_fraction = initialize_particals_on_surface(num_particles, radius, box_w, box_h)
@@ -281,7 +339,7 @@ plt.savefig("initial_particals")
 
 
 
-num_steps = 100000
+num_steps = 1000000
 
 
 time_total = np.arange(num_steps) * delta_t
@@ -294,17 +352,34 @@ tempeeratures = np.zeros(num_steps)
 positions = particals_position.copy()
 velocities = particals_velocity.copy()
 
+rc_skin = 1. * rc
+rc_de = rc + rc_skin
+
+last_positions = positions.copy()
+
+cell_list, neighbour_map = prepare_cell_lists(positions, box_w, box_h, rc_de)
+
+forces, potential = calculate_forces_and_potential_between_particals(positions, box_w, box_h, cell_list, neighbour_map, rc)
+
+
 for i in range(num_steps):
 
     print("current step:", i)
-    forces, potential = calculate_forces_and_potential_between_particals(positions, rc)
+
+    
     #print("forces", forces)
     #print("positions", positions)
     #print("velocities", velocities)
-    positions, velocities, forces, pot_energies[i], kin_energies[i], tot_energies[i], tempeeratures[i] = velocity_verlet(
-        positions, velocities, forces, delta_t, box_w, m
-    )
+    max_displacement = np.max(np.linalg.norm(positions - last_positions, axis=1))
+
+    if max_displacement > rc_skin / 4:
+        cell_list, neighbour_map = prepare_cell_lists(positions, box_w, box_h, rc_de)
+        last_positions = positions.copy()  # Reset displacement tracking
+
+    cell_list, neighbour_map = prepare_cell_lists(positions, box_w, box_h, rc_de)
+    positions, velocities, forces, pot_energies[i], kin_energies[i], tot_energies[i], tempeeratures[i] = velocity_verlet(positions, velocities, forces, delta_t, [box_w, box_h], cell_list, neighbour_map, rc=rc)
     #print("pot_energies", pot_energies.shape)
+
 
 
 
