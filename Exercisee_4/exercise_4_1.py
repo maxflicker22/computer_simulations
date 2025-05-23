@@ -8,6 +8,53 @@ from tqdm import tqdm
 
 ##-----------Functions------------------
 
+def plot_diffusion_constant(r_s, v_s, dt, given_temperatures):
+    fig, axs = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+    D = {}
+
+    for temp in given_temperatures:
+        print(f"\nTemperature: {temp} K")
+        r = r_s[temp]
+        v = v_s[temp]
+        num_time_steps = r.shape[0]
+        times = np.arange(num_time_steps) * dt
+
+        # Compute all diffusion constants and time-dependent correlations
+        D[temp] = np.zeros(3)
+        D[temp][0], msd = diffusion_constant_with_r(r, dt)
+        D[temp][1], vacf_time = diffusion_constant_with_v_(v, dt)
+        D[temp][2], vacf_fft = diffusion_constant_fft(v, dt=dt)
+
+        # Print all diffusion constants
+        print(f"MSD: {D[temp][0]:.4f}, VACF-time: {D[temp][1]:.4f}, VACF-FFT: {D[temp][2]:.4f}")
+
+        # Plot MSD (Δr²(t))
+        axs[0].plot(times[1:], msd, label=f'T = {temp} K')
+
+        # Plot VACFs
+        axs[1].plot(times[1:], vacf_time, '--', label=f'VACF time, T={temp}K')
+        axs[1].plot(times, vacf_fft, '-', label=f'VACF FFT, T={temp}K')
+
+    # Plot styling
+    axs[0].set_ylabel(r'MSD $\langle \Delta r^2(t) \rangle$')
+    axs[0].set_title('Mean Squared Displacement')
+    axs[0].legend()
+    axs[0].grid()
+
+    axs[1].set_xlabel('Time [s]')
+    axs[1].set_ylabel(r'VACF $\langle \vec{v}(0) \cdot \vec{v}(t) \rangle$')
+    axs[1].set_title('Velocity Autocorrelation Function')
+    axs[1].legend()
+    axs[1].grid()
+
+    plt.tight_layout()
+    plt.show()
+
+    return D
+
+
+
+
 #---Plot Functions-----
 def plot_energies(time_total, kin_energies, pot_energies, tot_energies, given_temperatures, packing_fraction):
     
@@ -390,16 +437,24 @@ def print_initial_conditions(num_particals, radius, box_size, initial_T, delta_e
     print("delta_t", delta_t)
     print("num_steps", num_steps)
 
-def diffusion_constant_with_r(r_s, dim, time):
+def diffusion_constant_with_r(r_s, dt):
+    num_time_steps, num_partical, dim = r_s.shape
     r_0 = r_s[0, :, :]
     r_t = r_s[1:, :, :]
-    
-    delta_r = np.mean(np.abs(r_t - r_0)) # mean of absolut values of distances r_t and r_0
-    D = delta_r / 2 / dim / time # Calculate Diffusion consant
-    return D
+    total_time = np.arange(num_time_steps) * dt
+    diff_r = r_t - r_0
+
+    delta_r = np.mean(np.sum(diff_r ** 2, axis=2), axis=1) # mean of absolut values of distances r_t and r_0
+    # Calculate Diffusion constant from slope of function
+    fit_start = num_time_steps // 2
+    slope, _ = np.polyfit(time_total[fit_start:], delta_r[fit_start:], 1)
+    D = slope / (2 * dim)
+
+    return D, delta_r
 
 
-def diffusion_constant_with_v_(v_s, dim, dt):
+def diffusion_constant_with_v_(v_s, dt):
+    num_time_steps, num_partical, dim = v_s.shape
     v_0 = v_s[0, :, :]
     v_t = v_s[1:, :, :]
 
@@ -409,11 +464,15 @@ def diffusion_constant_with_v_(v_s, dim, dt):
     # Integrate over dt
     D = np.trapezoid(vel_auto_cor, dx=dt) / dim # verwende n-1 intervalle bei n werte
 
-    return D
+    return D, vel_auto_cor
 
 def diffusion_constant_fft(v_s, dt):
     num_steps, num_partical, dim = v_s.shape
-    v_s_fft = np.fft(v_s, axis=0)
+
+    # Reshape to (num_steps, total_dims)
+    v_flat = v_s.reshape(num_steps, -1) # Mitteln über dimensionen und partical 
+
+    v_s_fft = np.fft.fft(v_flat, axis=0)
     power_spectrum = np.abs(v_s_fft) ** 2
 
     # Average of all particals 
@@ -423,9 +482,8 @@ def diffusion_constant_fft(v_s, dt):
 
     D = np.trapezoid(vel_auto_cor, dx=dt) / dim
 
-    return D
 
-
+    return D, vel_auto_cor
 
 
 
@@ -470,7 +528,8 @@ particals_position, packing_fraction = initialize_particals_on_surface(num_parti
 particals_velocity = initialize_velocities_of_particals(len(particals_position), initial_T, kb, m)
 
 # Plot initial conditions
-plot_initial_condition("initial_particals", particals_position, particals_velocity, packing_fraction, box_w, box_h, initial_T)
+#plot_initial_condition("initial_particals", particals_position, particals_velocity, packing_fraction, box_w, box_h, initial_T)
+
 
 
 #------- Sart Simulation-----
@@ -493,6 +552,8 @@ for temp in given_temperatures:
     r_s[temp][0, :, :] = positions
     v_s[temp][0, :, :] = velocities
 
+
+
     # Calculate cell_list and neighbour list for the first time
     cell_list, neighbour_map = prepare_cell_lists(positions, box_w, box_h, rc_de)
     
@@ -513,20 +574,30 @@ for temp in given_temperatures:
         r_s[temp][i + 1, :, :] = positions
         v_s[temp][i + 1, :, :] = velocities
 
+    
+
+
+
+
 
 #-----------------Plot Results---------------
 
 # Print Parameter
-print_initial_conditions(num_particles, radius, [box_w, box_h], initial_T, delta_epsilon, num_steps, delta_t)
+#print_initial_conditions(num_particles, radius, [box_w, box_h], initial_T, delta_epsilon, num_steps, delta_t)
 # Plot final Conditin
-plot_initial_condition("final_parical_positions", positions, velocities, packing_fraction, box_w, box_h, initial_T)
+#plot_initial_condition("final_parical_positions", positions, velocities, packing_fraction, box_w, box_h, initial_T)
 # Plot Energies  s
-plot_energies(time_total, kin_energies, pot_energies, tot_energies, given_temperatures, packing_fraction)
+#plot_energies(time_total, kin_energies, pot_energies, tot_energies, given_temperatures, packing_fraction)
 # Plot Temperature
-plot_temperature(time_total, kinetic_temperature, given_temperatures, packing_fraction)
+#plot_temperature(time_total, kinetic_temperature, given_temperatures, packing_fraction)
 # Plot Radial Distribution
-plot_radial_distribution(r_array, radial_distributions, given_temperatures, packing_fraction)
+#plot_radial_distribution(r_array, radial_distributions, given_temperatures, packing_fraction)
 
+# Plot Diffusion Constant
+D = plot_diffusion_constant(r_s, v_s, delta_t, given_temperatures)
+print("Diffusi9n Constant", D)
 #----------------------End----------------------
 
 
+
+# %%
