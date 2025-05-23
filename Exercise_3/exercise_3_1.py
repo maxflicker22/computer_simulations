@@ -105,7 +105,7 @@ def prepare_cell_lists(positions, box_w, box_h, rc):
 
     cell_ids_x = (positions[:, 0] // rc).astype(np.int32) % num_cells_x
     cell_ids_y = (positions[:, 1] // rc).astype(np.int32) % num_cells_y
-    cell_ids = cell_ids_y * num_cells_x + cell_ids_x
+    cell_ids = cell_ids_y * num_cells_x + cell_ids_x # Flatten Cell ids
 
     cell_indices = [[] for _ in range(num_cells)]
     for idx, cell_id in enumerate(cell_ids):
@@ -295,7 +295,7 @@ T = 1.0  # Temperature in Kelvin
 kb = 1.  # Boltzmann constant
 sigma = 1.0 # length scale
 epsilon = 1.0  # eneregy scale
-delta_t = 0.000001 * np.sqrt(m * sigma ** 2 / epsilon) # time step
+delta_t = 0.0001 * np.sqrt(m * sigma ** 2 / epsilon) # time step
 rc = 3. * sigma  # Cutoff radius for neighbor search
 # OBERVATION: Packingfracion is when random between 0.5 and 0.6
 
@@ -339,7 +339,7 @@ plt.savefig("initial_particals")
 
 
 
-num_steps = 100000
+num_steps = 10000
 
 
 time_total = np.arange(num_steps) * delta_t

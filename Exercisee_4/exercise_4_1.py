@@ -4,11 +4,13 @@ import matplotlib.pyplot as plt
 import scipy.constants as const
 import time
 from numba import njit, prange
+from tqdm import tqdm
 
 #-----------Functions------------------
 
-def plot_initial_condition(particals_position, particals_velocity, packing_fraction, box_w, box_h):
-    print(f"Packing fraction: {packing_fraction:.2f}")
+def plot_initial_condition(filename, particals_position, particals_velocity, packing_fraction, box_w, box_h, initial_T):
+    print(f"Packing fraction: {packing_fraction:.4f}")
+    print("True Number of particals", particals_position.shape[0])
     # OBERVATION: Packingfracion is when random between 0.5 and 0.6
 
     # Plotting
@@ -17,7 +19,7 @@ def plot_initial_condition(particals_position, particals_velocity, packing_fract
     ax.set_ylim(0, box_h)
     ax.set_xlabel('X-axis')
     ax.set_ylabel('Y-axis')
-    ax.set_title('Particles on Surface')
+    ax.set_title(f'Particles on Surface with PF = {packing_fraction:.4f}, and T = {initial_T}')
     ax.set_aspect('equal', adjustable='box')
     ax.grid(True)
 
@@ -36,8 +38,8 @@ def plot_initial_condition(particals_position, particals_velocity, packing_fract
         ax.add_patch(circle)
         ax.plot(pos[0], pos[1], 'o', color='blue', markersize=5)
     plt.tight_layout()
-    plt.savefig("initial_particals")
-    #plt.show()
+    plt.savefig(f"{filename}_PF_{packing_fraction:.4f}_T_{initial_T}.png")
+    plt.show()
 
 def is_overlapping(new_position, existing_positions, radius_of_particales, box_width, box_height):
     """
@@ -77,6 +79,14 @@ def  initialize_particals_on_surface(number_of_particles, radius_of_particales, 
     packing_fraction = len(particels_position_list) * np.pi * radius_of_particales**2 / (box_width * box_height)
     particals = np.array(particels_position_list)
     return particals, packing_fraction
+
+def initialize_particals_ordered(number_of_particles, radius_of_particales, varaince_of_positij, box_width, box_height):
+    """ Initialize ordered Particals with certain radius and count
+    with ceretain variance in the order of the center
+    """
+    #np.arange(0, box_h, 2*)
+    #return particals, packing_fraction
+
 
 def initialize_velocities_of_particals(number_of_particles, T = 1.0, kb = 1., m=1.0):
     """
@@ -209,24 +219,23 @@ def compute_distances_with_cutoff_numba(positions, box_w, box_h, cell_indices, n
 
     return distance_matrix
 
-def calculate_forces_and_potential_between_particals(positions, box_w, box_h, cell_list, neighbours_map, rc):
+def calculate_forces_and_potential_between_particals(positions, box_w, box_h, cell_list, neighbours_map, rc, r_array, delta_epsilon):
     """
     Calculate forces between particles based on the Wang-Frenkel potential.
     """
     #cell_list, neighbours_map = prepare_cell_lists(positions, box_w, box_h, rc)
-    partical_distances = compute_distances_with_cutoff_numba(positions, box_w, box_h, cell_list, neighbours_map, rc)
-    #partical_distances = calculate_distance_between_particals(positions, box_w, box_h)
+    #partical_distances = compute_distances_with_cutoff_numba(positions, box_w, box_h, cell_list, neighbours_map, rc)
+    partical_distances = calculate_distance_between_particals(positions, box_w, box_h)
     #print(f"Partical distances: {partical_distances.shape}")
     N = partical_distances.shape[0]
-    i_lower, j_lower = np.tril_indices(N, k=-1)
-    r_values = partical_distances[i_lower, j_lower]
     #print(f"R values: {r_values.shape}")
     # Calculate forces using the Wang-Frenkel potential
     r = np.linalg.norm(partical_distances, axis=-1)  # Shape: (N, N)
+    g = radial_distribution(r, r_array, delta_epsilon, box_w, box_h)
     wf_force_values = wang_frenkel_force_vector(r, partical_distances,  rc=rc)
     wf_pot_energy_values = wang_frenkel(r, rc=rc)
     #print("wf_pot_energy_values", wf_pot_energy_values)
-    return wf_force_values, wf_pot_energy_values
+    return wf_force_values, wf_pot_energy_values, g
     # Calculate forces using the Wang-Frenkel potential
 
 @njit()
@@ -243,7 +252,7 @@ def calculate_distance_between_particals(positions, box_w, box_h):
     return delta
 
 
-def velocity_verlet(positions, velocities, forces, dt, box_size, cell_list, neighbour_map, delta_thermostat, temperature, step, thermo_interval, m=1.0, kb = 1.0, rc=2.5):
+def velocity_verlet(positions, velocities, forces, dt, box_size, cell_list, neighbour_map, delta_thermostat, temperature, step, thermo_interval, r_array, delta_epsilon, m=1.0, kb = 1.0, rc=2.5):
     """One step of the velocity-Verlet algorithm."""
     # Half-step velocity update
     velocities_half = velocities.copy() +  0.5 * forces * dt / m
@@ -262,7 +271,7 @@ def velocity_verlet(positions, velocities, forces, dt, box_size, cell_list, neig
     positions %= box_size  # Periodic boundary conditions
 
     # Calculate Force and Potential Energy
-    forces_new, potential_energy = calculate_forces_and_potential_between_particals(positions, box_size[0], box_size[0], cell_list, neighbour_map, rc=rc)
+    forces_new, potential_energy, g = calculate_forces_and_potential_between_particals(positions, box_size[0], box_size[0], cell_list, neighbour_map, rc, r_array, delta_epsilon)
 
     # Full-step velocity update
     velocities = velocities_half + 0.5 * forces_new * dt / m
@@ -277,7 +286,7 @@ def velocity_verlet(positions, velocities, forces, dt, box_size, cell_list, neig
     Nf = d * N - d - 1
     kinetic_temperature = (kinetic_energy) / (Nf * kb)
 
-    return positions, velocities, forces_new, potential_energy, kinetic_energy, total_energy, kinetic_temperature
+    return positions, velocities, forces_new, potential_energy, kinetic_energy, total_energy, kinetic_temperature, g
 
     
 def rescale_factor_heyes_thermostat(delta):
@@ -291,23 +300,65 @@ def acceptance_prob_thermostat(kin_energy, z, T, kB, d, N):
     weight = z**exponent * np.exp(-kin_energy * (z**2 - 1) / (kB * T))
     return np.random.uniform() < min(1, weight)
 
+def radial_distribution(rij, r_array, delta_epsilon, box_w, box_h):
+    N = rij.shape[0]  # Anzahl Teilchen
+    N2 = N * N        # N^2
+    L2 = box_w * box_h  # Fläche der Box
+
+    # Entferne Nullabstände (z. B. i == j)
+    non_zero_rij = rij[rij != 0.0]
+
+    # Halbe Diagonale für periodische Entfernung
+    R = 0.5 * np.sqrt(box_w**2 + box_h**2)
+
+    radial_distribution = np.zeros(len(r_array))
+
+    for i, r in enumerate(r_array):
+        # Periodischer Abstand im Betrag
+        diff = np.abs((non_zero_rij - r + R) % (2 * R) - R)
+        #diff = np.abs((non_zero_rij - r))
+        # Bin-Filter
+        within_bin = diff < delta_epsilon
+        count = np.count_nonzero(within_bin) / 2
+
+        # Normierung
+        pair_count = N * (N - 1) 
+        shell_area = 2 * np.pi * r * delta_epsilon  # Fläche des Rings
+        ideal_count =  (pair_count / L2) * shell_area          # Erwartete Anzahl im Ring
+        g_r_value = count / ideal_count
+
+        radial_distribution[i] = g_r_value
+
+    return radial_distribution
+
+
+def print_initial_conditions(num_particals, radius, box_size, initial_T, delta_epsilon, delta_t, num_steps):
+    print("num_particals", num_particals)
+    print("radius", radius)
+    print("box_size", box_size)
+    print("initial_T", initial_T)
+    print("delta_epsilon", delta_epsilon)
+    print("delta_t", delta_t)
+    print("num_steps", num_steps)
+
+
 #----------------Programm--------------------------------------
 
 # Simulation Parameters
-num_particles = 5000
+num_particles = 300
 radius = 1.
-box_w, box_h = 10, 10
-initial_T = 200.0
+box_w, box_h = 85.0, 85.0
+initial_T = 200.
 m = 1.0
 kb = 1.0  # Boltzmann constant
-sigma = 1.0 # length scale
+sigma = 1.0 # length scsale
 epsilon = 1.0  # eneregy scale
-delta_t = 0.000001 * np.sqrt(m * sigma ** 2 / epsilon) # time step
-rc = 3. * sigma  # Cutoff radius for neighbor search
-rc_skin = 1. * rc
+delta_t = 0.00001 * np.sqrt(m * sigma ** 2 / epsilon) # time step
+rc = box_w   # Cutoff radius for neighbor search
+rc_skin = 0. * rc
 rc_de = rc + rc_skin
 delta_thermostat = 0.015
-num_steps = 10000
+num_steps = 1000
 time_total = np.arange(num_steps) * delta_t
 thermo_interval = 2
 
@@ -315,7 +366,13 @@ kin_energies = {}
 pot_energies = {}
 tot_energies = {}
 kinetic_temperature = {}
-given_temperatures = [100.0, 350.0]
+radial_distributions = {}
+
+given_temperatures = [initial_T]
+delta_epsilon = radius / 4
+r_max = np.sqrt(box_w ** 2 + box_h ** 2) / 2
+r_array = np.arange(2. * radius, r_max, delta_epsilon)
+
 
 
 # Calculate initial particals position, velocity etc.
@@ -323,7 +380,7 @@ particals_position, packing_fraction = initialize_particals_on_surface(num_parti
 particals_velocity = initialize_velocities_of_particals(len(particals_position), initial_T, kb, m)
 
 # Plot initial conditions
-plot_initial_condition(particals_position, particals_velocity, packing_fraction, box_w, box_h)
+plot_initial_condition("initial_particals", particals_position, particals_velocity, packing_fraction, box_w, box_h, initial_T)
 
 # Sart Simulation
 for temp in given_temperatures:
@@ -337,15 +394,16 @@ for temp in given_temperatures:
     pot_energies[temp] = np.zeros(num_steps)
     tot_energies[temp] = np.zeros(num_steps)
     kinetic_temperature[temp] = np.zeros(num_steps)
+    radial_distributions[temp] = np.zeros((num_steps, len(r_array)))
 
     # Calculate cell_list and neighbour list for the first time
     cell_list, neighbour_map = prepare_cell_lists(positions, box_w, box_h, rc_de)
     
     # initial forces and potential
-    forces, potential = calculate_forces_and_potential_between_particals(positions, box_w, box_h, cell_list, neighbour_map, rc)
+    forces, potential, _ = calculate_forces_and_potential_between_particals(positions, box_w, box_h, cell_list, neighbour_map, rc, r_array, delta_epsilon)
 
-    for i in range(num_steps):
-        print("current step:", i)
+    for i in tqdm(range(num_steps), desc="Simulating"):
+        #print("current step:", i)
         # max displacement for adjusting neighbourts_list (Optional)
         max_displacement = np.max(np.linalg.norm(positions - last_positions, axis=1))
         if max_displacement > rc_skin / 8:
@@ -354,8 +412,12 @@ for temp in given_temperatures:
 
         #cell_list, neighbour_map = prepare_cell_lists(positions, box_w, box_h, rc_de)
         # make Timestep and return necessary Variables
-        positions, velocities, forces, pot_energies[temp][i], kin_energies[temp][i], tot_energies[temp][i], kinetic_temperature[temp][i] = velocity_verlet(positions, velocities, forces, delta_t, [box_w, box_h], cell_list, neighbour_map, delta_thermostat, temp, i, thermo_interval, rc=rc)
+        positions, velocities, forces, pot_energies[temp][i], kin_energies[temp][i], tot_energies[temp][i], kinetic_temperature[temp][i], radial_distributions[temp][i, :] = velocity_verlet(positions, velocities, forces, delta_t, [box_w, box_h], cell_list, neighbour_map, delta_thermostat, temp, i, thermo_interval, r_array, delta_epsilon, rc=rc)
 
+# Print Parameter
+print_initial_conditions(num_particles, radius, [box_w, box_h], initial_T, delta_epsilon, num_steps, delta_t)
+# Plot final Conditin
+plot_initial_condition("final_parical_positions", positions, velocities, packing_fraction, box_w, box_h, initial_T)
 
 #-----------------Plot Results---------------
 
@@ -367,12 +429,13 @@ for temp in given_temperatures:
     plt.plot(time_total, tot_energies[temp], label=f"Total Energy T={temp}")
 plt.xlabel("Time [s]")
 plt.ylabel("Energy [J]")
-plt.title("Energy vs Time")
+plt.title(f"Energy vs Time - PF_{packing_fraction:.4f}_T_{initial_T}")
 plt.grid(True)
 plt.legend()
 plt.tight_layout()
-plt.savefig("Energy Balance")
-#plt.show()
+plt.savefig(f"Energy_Balance_PF_{packing_fraction:.4f}_T_{initial_T}.png")
+
+plt.show()
 
 # Plot Temperature
 plt.figure(figsize=(8, 5))
@@ -381,11 +444,27 @@ for temp in given_temperatures:
 plt.legend()
 plt.xlabel("Time [s]")
 plt.ylabel("Temperature [K or Reduced Units]")
-plt.title("Temperature vs Time")
+plt.title(f"Temperature vs Time - PF_{packing_fraction:.4f}_T_{initial_T}")
 plt.grid(True)
 plt.tight_layout()
-plt.savefig("Temperature")
-#plt.show()
+plt.savefig(f"Temperature_PF_{packing_fraction:.4f}_T_{initial_T}.png")
+plt.show()
+
+# Plot Radial Distribution
+plt.figure(figsize=(8, 5))
+for temp in given_temperatures:
+    time_average_g = np.mean(radial_distributions[temp], axis=0)
+    #print("shape_time_average_radial_dis", time_average_g)
+    plt.plot(r_array, time_average_g, linestyle='-', marker='d', markersize=3, label=f"T={temp}")
+plt.axhline(1.0)
+plt.legend()
+plt.xlabel("r []]")
+plt.ylabel("Radial Distribution")
+plt.title(f"Radial Distribution vs r - PF_{packing_fraction:.4f}_T_{initial_T}")
+plt.grid(True)
+plt.tight_layout()
+plt.savefig(f"RDF_PF_{packing_fraction:.4f}_T_{initial_T}.png")
+plt.show()
 
 # %%
 
