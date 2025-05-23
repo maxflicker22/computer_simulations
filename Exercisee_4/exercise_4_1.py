@@ -6,7 +6,54 @@ import time
 from numba import njit, prange
 from tqdm import tqdm
 
-#-----------Functions------------------
+##-----------Functions------------------
+
+#---Plot Functions-----
+def plot_energies(time_total, kin_energies, pot_energies, tot_energies, given_temperatures, packing_fraction):
+    
+    plt.figure(figsize=(10, 6))
+    for temp in given_temperatures:
+        plt.plot(time_total, kin_energies[temp], label=f"Kinetic Energy T={temp}")
+        plt.plot(time_total, pot_energies[temp], label=f"Potential Energy T={temp}")
+        plt.plot(time_total, tot_energies[temp], label=f"Total Energy T={temp}")
+    plt.xlabel("Time [s]")
+    plt.ylabel("Energy [J]")
+    plt.title(f"Energy vs Time - PF_{packing_fraction:.4f}_T_{given_temperatures}")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f"Energy_Balance_PF_{packing_fraction:.4f}_T_{given_temperatures}.png")
+    plt.show()
+
+def plot_temperature(time_total, kinetic_temperature, given_temperatures, packing_fraction):
+    plt.figure(figsize=(8, 5))
+    for temp in given_temperatures:
+        plt.plot(time_total, kinetic_temperature[temp], linestyle='-', marker='d', markersize=3, label=f"T={temp}")
+    plt.legend()
+    plt.xlabel("Time [s]")
+    plt.ylabel("Temperature [K or Reduced Units]")
+    plt.title(f"Temperature vs Time - PF_{packing_fraction:.4f}_T_{given_temperatures}")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"Temperature_PF_{packing_fraction:.4f}_T_{given_temperatures}.png")
+    plt.show()
+
+def plot_radial_distribution(r_array, radial_distributions, given_temperatures, packing_fraction):
+    plt.figure(figsize=(8, 5))
+    for temp in given_temperatures:
+        time_average_g = np.mean(radial_distributions[temp], axis=0)
+        #print("shape_time_average_radial_dis", time_average_g)
+        plt.plot(r_array, time_average_g, linestyle='-', marker='d', markersize=3, label=f"T={temp}")
+    plt.axhline(1.0)
+    plt.legend()
+    plt.xlabel("r []]")
+    plt.ylabel("Radial Distribution")
+    plt.title(f"Radial Distribution vs r - PF_{packing_fraction:.4f}_T_{given_temperatures}")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"RDF_PF_{packing_fraction:.4f}_T_{given_temperatures}.png")
+    plt.show()
+
 
 def plot_initial_condition(filename, particals_position, particals_velocity, packing_fraction, box_w, box_h, initial_T):
     print(f"Packing fraction: {packing_fraction:.4f}")
@@ -40,6 +87,8 @@ def plot_initial_condition(filename, particals_position, particals_velocity, pac
     plt.tight_layout()
     plt.savefig(f"{filename}_PF_{packing_fraction:.4f}_T_{initial_T}.png")
     plt.show()
+
+#-------
 
 def is_overlapping(new_position, existing_positions, radius_of_particales, box_width, box_height):
     """
@@ -341,24 +390,63 @@ def print_initial_conditions(num_particals, radius, box_size, initial_T, delta_e
     print("delta_t", delta_t)
     print("num_steps", num_steps)
 
+def diffusion_constant_with_r(r_s, dim, time):
+    r_0 = r_s[0, :, :]
+    r_t = r_s[1:, :, :]
+    
+    delta_r = np.mean(np.abs(r_t - r_0)) # mean of absolut values of distances r_t and r_0
+    D = delta_r / 2 / dim / time # Calculate Diffusion consant
+    return D
+
+
+def diffusion_constant_with_v_(v_s, dim, dt):
+    v_0 = v_s[0, :, :]
+    v_t = v_s[1:, :, :]
+
+    v_dot_pro = np.sum(v_0 * v_t, axis=-1)
+    vel_auto_cor = np.mean(v_dot_pro, axis=1)
+
+    # Integrate over dt
+    D = np.trapezoid(vel_auto_cor, dx=dt) / dim # verwende n-1 intervalle bei n werte
+
+    return D
+
+def diffusion_constant_fft(v_s, dt):
+    num_steps, num_partical, dim = v_s.shape
+    v_s_fft = np.fft(v_s, axis=0)
+    power_spectrum = np.abs(v_s_fft) ** 2
+
+    # Average of all particals 
+    G_omega = np.mean(power_spectrum, axis=1) # skipped normalization here
+
+    vel_auto_cor = np.real(np.fft.ifft(G_omega)) / num_steps
+
+    D = np.trapezoid(vel_auto_cor, dx=dt) / dim
+
+    return D
+
+
+
+
+
 
 #----------------Programm--------------------------------------
 
 # Simulation Parameters
 num_particles = 300
 radius = 1.
-box_w, box_h = 85.0, 85.0
-initial_T = 200.
+box_w, box_h = 30.0, 30.0
+initial_T = 5000.0
 m = 1.0
-kb = 1.0  # Boltzmann constant
-sigma = 1.0 # length scsale
+kb = 1.0  # Boltzmann constasnt
+sigma = 1.0 # lengtsh scsale
 epsilon = 1.0  # eneregy scale
-delta_t = 0.00001 * np.sqrt(m * sigma ** 2 / epsilon) # time step
+delta_t = 0.0001 * np.sqrt(m * sigma ** 2 / epsilon) # time step
 rc = box_w   # Cutoff radius for neighbor search
 rc_skin = 0. * rc
 rc_de = rc + rc_skin
 delta_thermostat = 0.015
-num_steps = 1000
+num_steps = 10000
 time_total = np.arange(num_steps) * delta_t
 thermo_interval = 2
 
@@ -367,11 +455,13 @@ pot_energies = {}
 tot_energies = {}
 kinetic_temperature = {}
 radial_distributions = {}
+r_s = {}
+v_s = {}
 
 given_temperatures = [initial_T]
 delta_epsilon = radius / 4
 r_max = np.sqrt(box_w ** 2 + box_h ** 2) / 2
-r_array = np.arange(2. * radius, r_max, delta_epsilon)
+r_array = np.arange(1. * radius, r_max, delta_epsilon)
 
 
 
@@ -382,7 +472,8 @@ particals_velocity = initialize_velocities_of_particals(len(particals_position),
 # Plot initial conditions
 plot_initial_condition("initial_particals", particals_position, particals_velocity, packing_fraction, box_w, box_h, initial_T)
 
-# Sart Simulation
+
+#------- Sart Simulation-----
 for temp in given_temperatures:
     # Set initial positions and velocities
     positions = particals_position.copy()
@@ -395,6 +486,12 @@ for temp in given_temperatures:
     tot_energies[temp] = np.zeros(num_steps)
     kinetic_temperature[temp] = np.zeros(num_steps)
     radial_distributions[temp] = np.zeros((num_steps, len(r_array)))
+    
+    # Position and Velocities over all Timesteps
+    r_s[temp] = np.zeros((num_steps + 1, positions.shape[0], positions.shape[1]))
+    v_s[temp] = np.zeros((num_steps + 1, velocities.shape[0], velocities.shape[1]))
+    r_s[temp][0, :, :] = positions
+    v_s[temp][0, :, :] = velocities
 
     # Calculate cell_list and neighbour list for the first time
     cell_list, neighbour_map = prepare_cell_lists(positions, box_w, box_h, rc_de)
@@ -413,61 +510,22 @@ for temp in given_temperatures:
         #cell_list, neighbour_map = prepare_cell_lists(positions, box_w, box_h, rc_de)
         # make Timestep and return necessary Variables
         positions, velocities, forces, pot_energies[temp][i], kin_energies[temp][i], tot_energies[temp][i], kinetic_temperature[temp][i], radial_distributions[temp][i, :] = velocity_verlet(positions, velocities, forces, delta_t, [box_w, box_h], cell_list, neighbour_map, delta_thermostat, temp, i, thermo_interval, r_array, delta_epsilon, rc=rc)
+        r_s[temp][i + 1, :, :] = positions
+        v_s[temp][i + 1, :, :] = velocities
+
+
+#-----------------Plot Results---------------
 
 # Print Parameter
 print_initial_conditions(num_particles, radius, [box_w, box_h], initial_T, delta_epsilon, num_steps, delta_t)
 # Plot final Conditin
 plot_initial_condition("final_parical_positions", positions, velocities, packing_fraction, box_w, box_h, initial_T)
-
-#-----------------Plot Results---------------
-
-# Plot Energies
-plt.figure(figsize=(10, 6))
-for temp in given_temperatures:
-    plt.plot(time_total, kin_energies[temp], label=f"Kinetic Energy T={temp}")
-    plt.plot(time_total, pot_energies[temp], label=f"Potential Energy T={temp}")
-    plt.plot(time_total, tot_energies[temp], label=f"Total Energy T={temp}")
-plt.xlabel("Time [s]")
-plt.ylabel("Energy [J]")
-plt.title(f"Energy vs Time - PF_{packing_fraction:.4f}_T_{initial_T}")
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.savefig(f"Energy_Balance_PF_{packing_fraction:.4f}_T_{initial_T}.png")
-
-plt.show()
-
+# Plot Energies  s
+plot_energies(time_total, kin_energies, pot_energies, tot_energies, given_temperatures, packing_fraction)
 # Plot Temperature
-plt.figure(figsize=(8, 5))
-for temp in given_temperatures:
-    plt.plot(time_total, kinetic_temperature[temp], linestyle='-', marker='d', markersize=3, label=f"T={temp}")
-plt.legend()
-plt.xlabel("Time [s]")
-plt.ylabel("Temperature [K or Reduced Units]")
-plt.title(f"Temperature vs Time - PF_{packing_fraction:.4f}_T_{initial_T}")
-plt.grid(True)
-plt.tight_layout()
-plt.savefig(f"Temperature_PF_{packing_fraction:.4f}_T_{initial_T}.png")
-plt.show()
-
+plot_temperature(time_total, kinetic_temperature, given_temperatures, packing_fraction)
 # Plot Radial Distribution
-plt.figure(figsize=(8, 5))
-for temp in given_temperatures:
-    time_average_g = np.mean(radial_distributions[temp], axis=0)
-    #print("shape_time_average_radial_dis", time_average_g)
-    plt.plot(r_array, time_average_g, linestyle='-', marker='d', markersize=3, label=f"T={temp}")
-plt.axhline(1.0)
-plt.legend()
-plt.xlabel("r []]")
-plt.ylabel("Radial Distribution")
-plt.title(f"Radial Distribution vs r - PF_{packing_fraction:.4f}_T_{initial_T}")
-plt.grid(True)
-plt.tight_layout()
-plt.savefig(f"RDF_PF_{packing_fraction:.4f}_T_{initial_T}.png")
-plt.show()
-
-# %%
-
+plot_radial_distribution(r_array, radial_distributions, given_temperatures, packing_fraction)
 
 #----------------------End----------------------
 
