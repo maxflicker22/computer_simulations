@@ -530,7 +530,7 @@ def for_loop_auto_correlation_r(num_time_steps, r_s):
     
     for tau in prange(num_time_steps):
         print("current r tau", tau)
-        diff = r_s[tau:] - r_s[:num_time_steps - tau]
+        diff = r_s[tau:] - r_s[:num_time_steps - tau] # Periodische Verschiebung berücksichtigt
         msd[tau] = np.mean(np.sum(diff**2, axis=2))
 
     return msd
