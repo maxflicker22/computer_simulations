@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-
 def plot_acceptance_rate(ks, acceptance_rate):
     """
     Plot the acceptance rate against the k values.
@@ -17,7 +16,7 @@ def plot_acceptance_rate(ks, acceptance_rate):
 
 def plot_energie_datas(beta_k, min_energies, average_energies, scaled_variance_energies, Energies_list):
     # Convert beta_k and energy lists to numpy arrays for consistent plotting
-    betas = np.array(beta_k[1:])  # Skip the first beta (beta_start)
+    betas = np.array(beta_k)  # Skip the first beta (beta_start)
     min_energies = np.array(min_energies)
     average_energies = np.array(average_energies)
     scaled_variance_energies = np.array(scaled_variance_energies)
@@ -86,23 +85,27 @@ def create_initial_city_positions(num_cities, box_size, seed):
     cities = np.random.rand(num_cities, 2) * box_size
     return cities , np.arange(num_cities)
 
-def plot_cities(cities, box_size, radius_of_city):
+
+def plot_cities(cities, box_size, radius_of_city, best_path_flag=False):
     """
     Plot the cities on a 2D plane.
     """
     plt.figure(figsize=(8, 8))
     plt.xlim(0, box_size)
     plt.ylim(0, box_size)
-    plt.scatter(cities[:, 0], cities[:, 1], s=radius_of_city*100, c='blue', alpha=0.5, label='Cities')
+    if best_path_flag:
+        plt.plot(cities[:, 0], cities[:, 1], s=radius_of_city*100, c='blue', alpha=0.5, label='Best Path')
+    else:
+        plt.scatter(cities[:, 0], cities[:, 1], s=radius_of_city*100, c='blue', alpha=0.5, label='Cities')
     plt.title('City Positions')
     plt.xlabel('X Position')
     plt.ylabel('Y Position')
     plt.grid()
     plt.legend()
     plt.show()
-    print("Initial city positions created successfully.")
-    print("Number of cities created:", len(cities))
-    print("City positions:\n", cities)
+    #print("Initial city positions created successfully.")
+    #print("Number of cities created:", len(cities))
+    #print("City positions:\n", cities)
 
 def calculate_distance_of_Salesman(cities):
     """
@@ -120,15 +123,16 @@ def reorder_citiy_configuratin(cities, order):
     """
     return cities[order]
 
-def propose_new_city_configuration(order, num_cities):
+def propose_new_city_configuration(order):
     """
     Propose a new city configuration.
     """
+    num_cities = len(order)
     first_index = np.random.randint(1, num_cities - 2)
     second_index = np.random.randint(first_index + 1, num_cities)
     new_order = order.copy()
     new_order[first_index], new_order[second_index] = new_order[second_index], new_order[first_index]
-    print(f"Proposed new order: {new_order}")
+    #print(f"Proposed new order: {new_order}")
     return new_order
 
 def acceptance_probability(old_distance, new_distance, beta):
@@ -145,16 +149,16 @@ def try_update_order(cities, old_distance, order, beta):
     Try to update the order of cities based on the Metropolis criterion.
     """
 
-    new_order = propose_new_city_configuration(order, len(order))
+    new_order = propose_new_city_configuration(order)
     new_distance = calculate_distance_of_Salesman(cities[new_order])
     
     prob = acceptance_probability(old_distance, new_distance, beta)
     
     if np.random.rand() < prob:
-        print("Accepted new configuration.")
+        #print("Accepted new configuration.")
         return new_order, new_distance
     else:
-        print("Rejected new configuration.")
+        #print("Rejected new configuration.")
         return order, old_distance
     
 def update_beta(beta, k, q):
@@ -168,7 +172,7 @@ def discuss_energies(energies_at_specific_beta, beta):
     """
     Discuss the energies at a specific beta value.
     """
-    print(f"Energies at beta = {beta}:")
+    #print(f"Energies at beta = {beta}:")
     energies = np.array(energies_at_specific_beta)
     length = len(energies)
     if length == 0:
@@ -179,22 +183,30 @@ def discuss_energies(energies_at_specific_beta, beta):
     variance_energy = np.var(energies)
     scaled_variance_energy = variance_energy * beta ** 2
     return  min_energy, average_energy, scaled_variance_energy
+
+def convegence_check(energies, threshold=1e-10):
+    """
+    Check if the energies have converged.
+    """
+    if len(energies) < 2:
+        return False
+    return np.abs(energies[-1] - energies[-2]) < threshold
     
 
 
 
 
 # Define parameters 
-box_size = 1.0  # Sizse of the box
-num_cities = 15  # Number of cities
+box_size = 1.0  # Size of the box
+num_cities = 50  # Number of cities
 radius_of_city = 1.0  # Radius of each city
 seed = 42  # Random seed for reproducibility
 beta_start = 1 # Inverse temperature parameter
 beta_k = []
-ks = np.arange(1, 10)  # Range of k values for beta update
-print("ks:", ks)
-q = 2
-steps_per_temperature = num_cities ** 2
+ks = np.arange(1, 20)  # Range of k values for beta update
+#print("ks:", ks)
+q = 1
+steps_per_temperature = 1 * (num_cities ** 2)
 # Initialize the list to store energies for each beta value
 Energies_list = {}
 
@@ -211,13 +223,16 @@ cities, order = create_initial_city_positions(num_cities, box_size, seed=seed)
 # Calculate the initial distance
 old_disance = calculate_distance_of_Salesman(cities[order])
 
-# Add First Beta to Beta_k list
-beta_k.append(beta_start)
 # Delete random seed to avoid confusion
-np.random.seed()
+np.random.seed(1234)
+
+convergence_reached = False
+
+print("ks", ks)
 
 # Start loop over cooling steps
 for k in ks:
+
     if k == 1:
         beta_k.append(update_beta(beta_start, k, q))
     else:
@@ -226,24 +241,38 @@ for k in ks:
     # Initialize the energies list for the current beta
     Energies_list[beta_k[-1]] = []
     Energies_list[beta_k[-1]].append(old_disance)
-    print("Energy_list for beta =", Energies_list[beta_k[-1]])
+    #print("Energy_list for beta =", Energies_list[beta_k[-1]])
 
-    accepted_energies = 1
+    accepted_energies = 0
 
     # Loop over steps for the current beta
-    old_distance = Energies_list[beta_k[-1]][-1]
+    old_distance = Energies_list[beta_k[-1]][-1].copy()
+
     for step in range(steps_per_temperature):
+
+        # Try Update the Current Order
         order, current_distance = try_update_order(cities, old_distance, order, beta_k[-1])
+
         if current_distance != old_distance:
             Energies_list[beta_k[-1]].append(current_distance)
-            old_distance = current_distance  # <== Hier wird die Referenzdistanz aktualisiert!
+            old_distance = current_distance.copy()  # <== Hier wird die Referenzdistanz aktualisiert!
 
-        print("Current Step:", step + 1, "/", steps_per_temperature)
+        #print("Current Step:", step + 1, "/", steps_per_temperature)
+
+        # Check for convergence
+        if convegence_check(Energies_list[beta_k[-1]]):
+            print("Convergence reached at step", step + 1)
+            print("Final order of cities:", order)
+            print("Final distance:", Energies_list[beta_k[-1]][-1])
+            accepted_energies = len(Energies_list[beta_k[-1]])
+            convergence_reached = True
+            print("convergence_reached:", convergence_reached)
+            break
     
     # Evaluation of Accepted Energies
     accepted_energies = len(Energies_list[beta_k[-1]])
     acceptance_rate.append(accepted_energies / steps_per_temperature)       
-    print("Acceepted Energies:", accepted_energies)
+    #print("Acceepted Energies:", accepted_energies)
 
     # Discuss energies at the current beta value
     min_energy, average_energy, scaled_variance_energy = discuss_energies(Energies_list[beta_k[-1]], beta_k[-1])
@@ -251,8 +280,21 @@ for k in ks:
     average_energies.append(average_energy)
     scaled_variance_energies.append(scaled_variance_energy)
 
+    if convergence_reached:
+        print("convergence_reached status = :", convergence_reached)
+        break
 
 
+    if k == ks[-1]:
+        print("Final order of cities:", order)
+        print("Final distance:", Energies_list[beta_k[-1]][-1])
+        print("Final beta value:", beta_k[-1])
+        print("Acceptance rate:", acceptance_rate[-1])
+        print("Nothing converged anymore, stopping the simulation.")
+
+
+
+print("min energies", min_energies)
 
 # Plotting the cities
 plot_cities(cities, box_size, radius_of_city)
@@ -261,7 +303,11 @@ plot_cities(cities, box_size, radius_of_city)
 plot_energie_datas(beta_k, min_energies, average_energies, scaled_variance_energies, Energies_list)
 
 # Plot the acceptance rate
-plot_acceptance_rate(ks, acceptance_rate)
+plot_acceptance_rate(ks[:len(acceptance_rate)], acceptance_rate)
+
+# Plotting the cities
+plot_cities(cities[order], box_size, radius_of_city, best_path_flag=True)
+
 
 
 
