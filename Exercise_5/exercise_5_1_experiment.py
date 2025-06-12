@@ -1,9 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
+import itertools
+import os
 
 #--------------------------------- Plot Functions ---------------------------------
 
-def plot_acceptance_rate(ks, acceptance_rate, alternative_pacc=False, q=None, steps_per_temperature=None):
+def plot_acceptance_rate(ks, acceptance_rate, alternative_pacc, q=None, steps_per_temperature=None):
     """
     Plot the acceptance rate against the k values.
     """
@@ -22,10 +25,10 @@ def plot_acceptance_rate(ks, acceptance_rate, alternative_pacc=False, q=None, st
     
     filename = f"q:{q}_L:{steps_per_temperature}_pacc:{pacc_label}_acceptance_rate_vs_k.png"
     plt.savefig(filename)
-    plt.show()
+    #plt.show()
 
 
-def plot_energie_datas(beta_k, min_energies, average_energies, scaled_variance_energies, Energies_list, alternative_pacc=False, q=None, steps_per_temperature=None):
+def plot_energie_datas(beta_k, min_energies, average_energies, scaled_variance_energies, Energies_list, alternative_pacc, q=None, steps_per_temperature=None):
     # Convert beta_k and energy lists to numpy arrays for consistent plotting
     betas = np.array(beta_k)
     min_energies = np.array(min_energies)
@@ -90,7 +93,7 @@ def plot_energie_datas(beta_k, min_energies, average_energies, scaled_variance_e
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     filename = f"q:{q}_L:{steps_per_temperature}_pacc:{pacc_label}_energy_metrics_vs_inverse_temperature.png"
     plt.savefig(filename)
-    plt.show()
+    #plt.show()
 
 
 #--------------------------------- Programm Functions ---------------------------------
@@ -129,7 +132,7 @@ def plot_cities(cities, box_size, radius_of_city, best_path_flag=False, alternat
     plt.legend()
     plt.tight_layout()
     plt.savefig(filename)
-    plt.show()
+    #plt.show()
 
 
 def calculate_distance_of_Salesman(cities):
@@ -160,7 +163,7 @@ def propose_new_city_configuration(order):
     #print(f"Proposed new order: {new_order}")
     return new_order
 
-def acceptance_probability(old_distance, new_distance, beta, alternative_pacc=False):
+def acceptance_probability(old_distance, new_distance, beta, alternative_pacc):
     """
     Calculate the acceptance probability for the new configuration.
     """
@@ -174,7 +177,7 @@ def acceptance_probability(old_distance, new_distance, beta, alternative_pacc=Fa
             # Standard acceptance probability calculation
             return np.exp((old_distance - new_distance) * beta)
 
-def try_update_order(cities, old_distance, order, beta):
+def try_update_order(cities, old_distance, order, beta, alternative_pacc):
     """
     Try to update the order of cities based on the Metropolis criterion.
     """
@@ -195,7 +198,7 @@ def update_beta(beta, k, q):
     """
     Update the beta parameter based on the given k and q.
     """
-    return beta * (k ** q)
+    return beta * np.power(k, q, dtype=np.float64)
 
 
 def discuss_energies(energies_at_specific_beta, beta):
@@ -250,9 +253,7 @@ def convergence_check(energies, threshold, step, threshold_acceptance_rate):
     print("Acceptance rate:", rate)
 
     return True
-
-
-    
+  
 
 def acceptance_rate_check(accepted_moves, total_moves, threshold):
     """
@@ -264,138 +265,162 @@ def acceptance_rate_check(accepted_moves, total_moves, threshold):
 
 #--------------------------------- Programm---------------------------------
 
-
-# Define parameters 
-
-#### Fixed Parameters von hier
-box_size = 1.0  # Size of the box
-num_cities = 50  # Number of cities
-radius_of_city = 1.0  # Radius of each city
-seed = 42  # Random seed for reproducibility
-beta_start = 1 # Inverse temperature parameter
-#### bis hier
-
-# Initialize variables
-beta_k = []
-ks = np.arange(1, 80)  # Range of k values for beta update
-q = 1.2 # Cooling rate
-steps_per_temperature = 1 * (num_cities ** 2)
-threshold = 5e-5  # Convergence threshold
-threshold_acceptanc_rate = 0.1#
-
-alternative_pacc = True  # Use alternative acceptance probability calculation
-
-# Initialize the list to store energies for each beta value
-Energies_list = {}
-
-# Initialize lists to store energies at specific beta values
-min_energies = []
-average_energies = []
-scaled_variance_energies = []
-acceptance_rate = []
-
-final_steps_to_convergence = 0  # Variable to track the final steps to convergence
-final_path_distance = 0.  # Variable to track the best path distance found
-
-
-# Create initial city positions and order
-cities, order = create_initial_city_positions(num_cities, box_size, seed=seed)
-# Calculate the initial distance
-old_disance = calculate_distance_of_Salesman(cities[order])
-
-# Delete random seed to avoid confusion
-np.random.seed(1234)
-
-# Conveergence flag
-convergence_reached = False
-
-# Start loop over cooling steps
-for k in ks:
-
-    if k == 1:
-        beta_k.append(update_beta(beta_start, k, q))
-    else:
-        beta_k.append(update_beta(beta_k[-1], k, q))
-
-    # Initialize the energies list for the current beta
-    Energies_list[beta_k[-1]] = []
-    Energies_list[beta_k[-1]].append(old_disance)
-    #print("Energy_list for beta =", Energies_list[beta_k[-1]])
-
-    accepted_energies = 0
-
-    # Loop over steps for the current beta
-    old_distance = Energies_list[beta_k[-1]][-1].copy()
-
-    for step in range(steps_per_temperature):
-
-        # Try Update the Current Order
-        order, current_distance = try_update_order(cities, old_distance, order, beta_k[-1])
-
-        if current_distance != old_distance:
-            Energies_list[beta_k[-1]].append(current_distance)
-            old_distance = current_distance.copy()  # <== Hier wird die Referenzdistanz aktualisiert!
-
-        #print("Current Step:", step + 1, "/", steps_per_temperature)
-
-        # Check for convergence
-        if convergence_check(Energies_list[beta_k[-1]], threshold, step + 1, threshold_acceptanc_rate):
-        #if acceptance_rate_check(len(Energies_list[beta_k[-1]]), step + 1, threshold_acceptanc_rate): 
-            final_steps_to_convergence = step + 1
-            final_path_distance = Energies_list[beta_k[-1]][-1]
-            print("Convergence reached at step", step + 1)
-            print("Final distance:", Energies_list[beta_k[-1]][-1])
-            accepted_energies = len(Energies_list[beta_k[-1]])
-            convergence_reached = True
-            print("convergence_reached:", convergence_reached)
-            break
+def run_simulated_annealing(q, beta_start, ks, steps_per_temperature, num_cities, box_size, radius_of_city, threshold, threshold_acceptanc_rate, seed, alternative_pacc):
     
-    # Evaluation of Accepted Energies
-    accepted_energies = len(Energies_list[beta_k[-1]])
-    acceptance_rate.append(accepted_energies / steps_per_temperature)       
-    #print("Acceepted Energies:", accepted_energies)
 
-    # Discuss energies at the current beta value
-    min_energy, average_energy, scaled_variance_energy = discuss_energies(Energies_list[beta_k[-1]], beta_k[-1])
-    min_energies.append(min_energy)
-    average_energies.append(average_energy)
-    scaled_variance_energies.append(scaled_variance_energy)
+    final_steps_to_convergence = 0  # Variable to track the final steps to convergence
+    final_path_distance = 0.  # Variable to track the best path distance found
 
-    if convergence_reached:
-        #print("convergence_reached status = ", convergence_reached)
-        break
+    # Initialize the list to store energies for each beta value
+    beta_k = []  # List to store beta values
+    Energies_list = {}
 
 
-    if k == ks[-1]:
-        print("Final order of cities:", order)
-        print("Final distance:", Energies_list[beta_k[-1]][-1])
-        print("Final beta value:", beta_k[-1])
-        print("Acceptance rate:", acceptance_rate[-1])
-        print("Nothing converged anymore, stopping the simulation.")
+    # Create initial city positions and order
+    cities, order = create_initial_city_positions(num_cities, box_size, seed=seed)
+    # Calculate the initial distance
+    old_disance = calculate_distance_of_Salesman(cities[order])
+
+    # Delete random seed to avoid confusion
+    np.random.seed(1234)
+
+    # Conveergence flag
+    convergence_reached = False
+
+    # Start loop over cooling steps
+    for k in ks:
+
+        if k == 1:
+            beta_k.append(update_beta(beta_start, k, q))
+        else:
+            beta_k.append(update_beta(beta_k[-1], k, q))
+
+        # Initialize the energies list for the current beta
+        Energies_list[beta_k[-1]] = []
+        Energies_list[beta_k[-1]].append(old_disance)
+        #print("Energy_list for beta =", Energies_list[beta_k[-1]])
 
 
-#--------------------------------- Plot Execution---------------------------------
+        # Loop over steps for the current beta
+        old_distance = Energies_list[beta_k[-1]][-1].copy()
 
-# Plotting the cities
-plot_cities(cities, box_size, radius_of_city, best_path_flag=True, alternative_pacc=alternative_pacc, q=q, steps_per_temperature=steps_per_temperature)
+        for step in range(steps_per_temperature):
+            # Try Update the Current Order
+            order, current_distance = try_update_order(cities, old_distance, order, beta_k[-1], alternative_pacc=alternative_pacc)
 
-# Plot the energy data
-plot_energie_datas(beta_k, min_energies, average_energies, scaled_variance_energies, Energies_list, alternative_pacc, q=q, steps_per_temperature=steps_per_temperature)
+            if current_distance != old_distance:
+                Energies_list[beta_k[-1]].append(current_distance)
+                old_distance = current_distance.copy()  # <== Hier wird die Referenzdistanz aktualisiert!
 
-# Plot the acceptance rate
-plot_acceptance_rate(ks[:len(acceptance_rate)], acceptance_rate, alternative_pacc=False, q=q, steps_per_temperature=steps_per_temperature)
+            #print("Current Step:", step + 1, "/", steps_per_temperature)
 
-# Plotting the cities
-plot_cities(cities[order], box_size, radius_of_city, best_path_flag=True, alternative_pacc=alternative_pacc, q=q, steps_per_temperature=steps_per_temperature)
+            # Check for convergence
+            if convergence_check(Energies_list[beta_k[-1]], threshold, step + 1, threshold_acceptanc_rate):
+            #if acceptance_rate_check(len(Energies_list[beta_k[-1]]), step + 1, threshold_acceptanc_rate): 
+                convergence_reached = True
+                print("convergence_reached:", convergence_reached)
+                break
+         
+        #print("Acceepted Energies:", accepted_energies)
 
-## Reults d
-# Notes on parameter effects:
-# q: Higher q means faster cooling → faster convergence but higher risk of local minima.
-#    Lower q means slower cooling → slower but better exploration, higher chance of finding the global minimum.
-# L: More steps per temp (higher L) → better sampling, more stable solutions but slower runtime.
-#    Lower L → faster runtime but risk of skipping good solutions.
-# pacc: Standard (exp) → fast convergence, risk of getting stuck.
-#       Logistic (1/(1+exp)) → smoother exploration, better at avoiding local minima but may converge slower.
+        final_steps_to_convergence = step + 1
+        final_path_distance = Energies_list[beta_k[-1]][-1]
+        
+        if convergence_reached:
+            #print("convergence_reached status = ", convergence_reached)
+            break
+
+
+        if k == ks[-1]:
+            print("Final order of cities:", order)
+            print("Final distance:", Energies_list[beta_k[-1]][-1])
+            print("Final beta value:", beta_k[-1])
+            print("Nothing converged anymore, stopping the simulation.")
+
+
+    #--------------------------------- Plot Execution---------------------------------
+
+    # Plotting the cities
+    #plot_cities(cities, box_size, radius_of_city, best_path_flag=False, alternative_pacc=alternative_pacc, q=q, steps_per_temperature=steps_per_temperature)
+
+    # Plotting the cities
+    #plot_cities(cities[order], box_size, radius_of_city, best_path_flag=True, alternative_pacc=alternative_pacc, q=q, steps_per_temperature=steps_per_temperature)
+
+    ## Reults d
+    # Notes on parameter effects:
+    # q: Higher q means faster cooling → faster convergence but higher risk of local minima.
+    #    Lower q means slower cooling → slower but better exploration, higher chance of finding the global minimum.
+    # L: More steps per temp (higher L) → better sampling, more stable solutions but slower runtime.
+    #    Lower L → faster runtime but risk of skipping good solutions.
+    # pacc: Standard (exp) → fast convergence, risk of getting stuck.
+    #       Logistic (1/(1+exp)) → smoother exploration, better at avoiding local minima but may converge slower.
+
+    
+    parameters = {
+        "beta_start": beta_start,
+        "alternative_pacc": alternative_pacc,
+        "beta_k": beta_k[-1],
+        "q": q,
+        "steps_per_temperature": steps_per_temperature,
+        "threshold": threshold,
+        "threshold_acceptanc_rate": threshold_acceptanc_rate,
+
+
+    }
+    results = {
+        "final_steps_to_convergence": final_steps_to_convergence,
+        "final_path_distance": final_path_distance,
+        "final_beta_value": beta_k[-1],
+    }
+
+    return parameters, results
+
+
+
+if __name__ == "__main__":
+    # Define parameters 
+
+    #### Fixed Parameters von hier
+    box_size = 1.0  # Size of the box
+    num_cities = 50  # Number of cities
+    radius_of_city = 1.0  # Radius of each city
+    seed = 42  # Random seed for reproducibility
+    beta_start = 1 # Inverse temperature parameter
+    #### bis hier
+
+    # Initialize variables
+    ks = np.arange(1, 80)  # Range of k values for beta update
+    threshold = 5e-5  # Convergence threshold
+    threshold_acceptanc_rate = 0.1 # Acceptance rate threshold for convergence
+
+    q = [0.5, 0.7, 0.9, 1.0, 1.1, 1.3]# Cooling rate
+    steps_per_temperature = [x * (num_cities **2) for x in [1, 2, 3, 4]]  # Steps per temperature
+    alternative_pacc = [False, True]  # Use alternative acceptance probability calculation
+
+    print("steps_per_temperature:", steps_per_temperature)
+
+    # Output file
+    filename_csv = "simulated_annealing_results.csv"
+    file_exists = os.path.exists(filename_csv)
+
+    # Run the simulated annealing algorithm
+    for q_, steps_, pacc in itertools.product(q, steps_per_temperature, alternative_pacc): 
+        
+        parameters, results = run_simulated_annealing(q_, beta_start, ks, steps_, num_cities, box_size, radius_of_city, threshold, threshold_acceptanc_rate, seed, pacc)
+        # Print the parameters and results
+        print("Parameters:", parameters)
+        print("Results:", results)
+        # Save parameters and results to a CSV file
+        # Merge both dictionaries into one flat dictionary (single row)
+        row = {**parameters, **results}
+        df = pd.DataFrame([row])
+        df.to_csv(filename_csv, mode='a', header=not file_exists, index=False)
+        file_exists = True
+        print("Results saved to simulated_annealing_results.csv")
+        # Save the beta_k values to a CSV file
+
+
+    
 
 
 
