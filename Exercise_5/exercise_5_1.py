@@ -197,6 +197,27 @@ def update_beta(beta, k, q):
     """
     return beta * (k ** q)
 
+def update_beta_specific_heat(beta_k, energies, delta=0.1):
+    """
+    Compute the next beta using specific heat-based cooling.
+
+    """
+    E = np.array(energies)
+    E_mean = np.mean(E)
+    E_std = np.std(E)
+
+    if E_mean == 0 or delta == 0:
+        raise ValueError("E_mean or delta is zero, cannot compute new beta.")
+
+    r = 1 - (delta / (beta_k * E_std))
+    if r <= 0:
+        r = 1e-3  # avoid division by zero or negative r
+
+    beta_k1 = beta_k / r
+
+    return beta_k1
+
+
 
 def discuss_energies(energies_at_specific_beta, beta):
     """
@@ -275,13 +296,21 @@ seed = 42  # Random seed for reproducibility
 beta_start = 1 # Inverse temperature parameter
 #### bis hier
 
+""" Top 3 Konfigurationen mit kleinstem final_path_distance:
+0.60                   7500              True             6.174558                        7500
+1.35                   2500             False             6.657424                         184
+1.15                   5000              True             6.690504                         161
+"""
 # Initialize variables
 beta_k = []
-ks = np.arange(1, 80)  # Range of k values for beta update
-q = 1.2 # Cooling rate
-steps_per_temperature = 1 * (num_cities ** 2)
-threshold = 5e-5  # Convergence threshold
-threshold_acceptanc_rate = 0.1#
+ks = np.arange(1, 1000)  # Range of k values for beta update
+q = 0.3  # Cooling rate
+steps_per_temperature = 3 * (num_cities ** 2)
+threshold = 1e-9  # Convergence threshold
+#threshold = 5e-5  # Convergence threshold from experiment
+threshold_acceptanc_rate = 0.1 # Acceptance rate threshold for convergence check
+
+delta = 0.05  # Delta for specific heat-based cooling
 
 alternative_pacc = True  # Use alternative acceptance probability calculation
 
@@ -312,12 +341,16 @@ convergence_reached = False
 # Start loop over cooling steps
 for k in ks:
 
+
     if k == 1:
         beta_k.append(update_beta(beta_start, k, q))
+        
+        
     else:
-        beta_k.append(update_beta(beta_k[-1], k, q))
+        beta_k.append(update_beta_specific_heat(beta_k[-1], Energies_list.get(beta_k[-1], []), delta=delta))
+        #beta_k.append(update_beta(beta_k[-1], k, q))
 
-    # Initialize the energies list for the current beta
+        # Initialize the energies list for the current beta
     Energies_list[beta_k[-1]] = []
     Energies_list[beta_k[-1]].append(old_disance)
     #print("Energy_list for beta =", Energies_list[beta_k[-1]])

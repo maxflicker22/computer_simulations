@@ -200,6 +200,26 @@ def update_beta(beta, k, q):
     """
     return beta * np.power(k, q, dtype=np.float64)
 
+def update_beta_specific_heat(beta_k, energies, delta=0.1):
+    """
+    Compute the next beta using specific heat-based cooling.
+
+    """
+    E = np.array(energies)
+    E_mean = np.mean(E)
+    E_std = np.std(E)
+
+    if E_mean == 0 or delta == 0:
+        raise ValueError("E_mean or delta is zero, cannot compute new beta.")
+
+    r = 1 - (delta / (beta_k * E_std))
+    if r <= 0:
+        r = 1e-3  # avoid division by zero or negative r
+
+    beta_k1 = beta_k / r
+
+    return beta_k1
+
 
 def discuss_energies(energies_at_specific_beta, beta):
     """
@@ -267,7 +287,8 @@ def acceptance_rate_check(accepted_moves, total_moves, threshold):
 
 def run_simulated_annealing(q, beta_start, ks, steps_per_temperature, num_cities, box_size, radius_of_city, threshold, threshold_acceptanc_rate, seed, alternative_pacc):
     
-
+    delta = 0.1  # Delta for specific heat-based cooling
+    
     final_steps_to_convergence = 0  # Variable to track the final steps to convergence
     final_path_distance = 0.  # Variable to track the best path distance found
 
@@ -293,7 +314,8 @@ def run_simulated_annealing(q, beta_start, ks, steps_per_temperature, num_cities
         if k == 1:
             beta_k.append(update_beta(beta_start, k, q))
         else:
-            beta_k.append(update_beta(beta_k[-1], k, q))
+            beta_k.append(update_beta_specific_heat(beta_k[-1], Energies_list.get(beta_k[-1], []), delta=delta))
+            #beta_k.append(update_beta(beta_k[-1], k, q))
 
         # Initialize the energies list for the current beta
         Energies_list[beta_k[-1]] = []
@@ -354,6 +376,7 @@ def run_simulated_annealing(q, beta_start, ks, steps_per_temperature, num_cities
     #    Lower L → faster runtime but risk of skipping good solutions.
     # pacc: Standard (exp) → fast convergence, risk of getting stuck.
     #       Logistic (1/(1+exp)) → smoother exploration, better at avoiding local minima but may converge slower.
+    #                            -> jumps easier from local minima because probability distribution is smoother
 
     
     parameters = {
@@ -393,14 +416,14 @@ if __name__ == "__main__":
     threshold = 5e-5  # Convergence threshold
     threshold_acceptanc_rate = 0.1 # Acceptance rate threshold for convergence
 
-    q = [0.5, 0.7, 0.9, 1.0, 1.1, 1.3]# Cooling rate
-    steps_per_temperature = [x * (num_cities **2) for x in [1, 2, 3, 4]]  # Steps per temperature
+    q = [0.4, 0.6, 0.8, 1.05, 1.15, 1.35, 1.5]# Cooling rate
+    steps_per_temperature = [x * (num_cities **2) for x in [1, 2, 3, 4, 5]]  # Steps per temperature
     alternative_pacc = [False, True]  # Use alternative acceptance probability calculation
 
     print("steps_per_temperature:", steps_per_temperature)
 
     # Output file
-    filename_csv = "simulated_annealing_results.csv"
+    filename_csv = "specific_heat_simulated_annealing_results.csv"
     file_exists = os.path.exists(filename_csv)
 
     # Run the simulated annealing algorithm
