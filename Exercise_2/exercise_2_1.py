@@ -114,6 +114,7 @@ def monte_carlo_simulation(n_steps, T):
         # Calculate the acceptance probability
         acceptance_prob = probability_to_accept(old_energy, new_energy, T)
         #print("Acceptance Probability: ", acceptance_prob)
+        
         # Accept or reject the new state
         if np.random.uniform(0, 1) < acceptance_prob: #np. random uniform(0, 1) generates a random number between 0 and 1 inclusive zero exclusive one
             accepted_steps += 1

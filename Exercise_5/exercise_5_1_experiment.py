@@ -416,7 +416,7 @@ if __name__ == "__main__":
     threshold = 5e-5  # Convergence threshold
     threshold_acceptanc_rate = 0.1 # Acceptance rate threshold for convergence
 
-    q = [0.4, 0.6, 0.8, 1.05, 1.15, 1.35, 1.5]# Cooling rate
+    q = [0.4, 0.5, 0.6, 0.7,  0.8, 0.9, 1.0, 1.05, 1.1,  1.15, 1.2,  1.35, 1.4, 1.5]# Cooling rate
     steps_per_temperature = [x * (num_cities **2) for x in [1, 2, 3, 4, 5]]  # Steps per temperature
     alternative_pacc = [False, True]  # Use alternative acceptance probability calculation
 

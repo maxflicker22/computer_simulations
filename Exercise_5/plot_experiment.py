@@ -123,3 +123,17 @@ plt.show()
 1.05                   2500             False             6.928982                        2500
 """
 
+""" OUTCOME TOP 10 KONFIGURTIONEN MITT SPECIFIIC HEAT
+Top 5 Konfigurationen mit kleinstem final_path_distance:
+   q  steps_per_temperature  alternative_pacc  final_path_distance  final_steps_to_convergence
+0.40                   7500             False            11.144721                        7500
+0.60                   7500             False            11.144721                        7500
+0.80                   7500             False            11.144721                        7500
+1.05                   7500             False            11.144721                        7500
+1.15                   7500             False            11.144721                        7500
+1.35                   7500             False            11.144721                        7500
+1.50                   7500             False            11.144721                        7500
+0.40                  10000              True            11.189658                       10000
+0.60                  10000              True            11.189658                       10000
+0.80                  10000              True            11.189658                       10000
+"""
